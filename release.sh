@@ -42,6 +42,20 @@ mkdir -p "$STAGE"
 
 SIGN_IDENTITY="$SIGN_IDENTITY" ./build-app.sh "$STAGE"
 
+# The app is notarized and stapled before it goes in the image, as well as the
+# image itself being notarized and stapled afterwards. Both are needed. The
+# image's ticket does not travel with the app when someone drags it out, so an
+# app carrying no ticket of its own has to reach Apple the first time it is
+# opened, and shows the "cannot be verified" warning to anyone offline.
+#
+# Only a zip can be submitted, not a bundle, so the app is zipped to be sent and
+# the ticket is stapled to the original bundle afterwards.
+echo "Submitting the app to Apple. This usually takes a few minutes."
+ditto -c -k --keepParent "$STAGE/$NAME.app" "$DIST/app.zip"
+xcrun notarytool submit "$DIST/app.zip" --keychain-profile "$NOTARY_PROFILE" --wait
+xcrun stapler staple "$STAGE/$NAME.app"
+rm -f "$DIST/app.zip"
+
 # Somewhere to drop the app. Without it the disk image is just a folder and the
 # reader has to know where the app is supposed to go.
 ln -s /Applications "$STAGE/Applications"
@@ -53,7 +67,7 @@ hdiutil create -quiet -volname "$NAME" -srcfolder "$STAGE" \
 # notarization ticket to the image, and an unsigned image cannot hold one.
 codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DMG"
 
-echo "Submitting to Apple. This usually takes a few minutes."
+echo "Submitting the disk image to Apple."
 xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
 
 # Stapling writes the ticket into the image, so a machine with no internet can
@@ -64,6 +78,12 @@ echo
 echo "=== checks ==="
 xcrun stapler validate "$DMG"
 spctl --assess --type open --context context:primary-signature -v "$DMG"
+
+# The check that matters: the app as someone receives it, with no network.
+MOUNT=$(hdiutil attach -nobrowse -readonly "$DMG" | grep -o '/Volumes/.*' | head -1)
+xcrun stapler validate "$MOUNT/$NAME.app"
+spctl --assess --type execute -v "$MOUNT/$NAME.app"
+hdiutil detach "$MOUNT" -quiet
 
 echo
 echo "Built $DMG"
