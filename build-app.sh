@@ -11,6 +11,12 @@ cd "$(dirname "$0")"
 NAME="Dorm WiFi"
 APP="${1:-$HOME/Applications}/$NAME.app"
 
+# Ad-hoc by default, which is all a build for this machine needs. A release
+# overrides it with a Developer ID, which is the only kind of signature Apple
+# will notarize, and which has to carry the hardened runtime and a trusted
+# timestamp to be accepted.
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+
 swift build -c release --product nhannhtdormwifihack-menubar
 
 rm -rf "$APP"
@@ -62,8 +68,15 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-# Ad-hoc signature. Without one, macOS kills it on launch on Apple silicon.
-codesign --force --sign - "$APP" >/dev/null 2>&1 || true
+# A signature of some kind is not optional: without one, macOS kills the app on
+# launch on Apple silicon.
+if [ "$SIGN_IDENTITY" = "-" ]; then
+    codesign --force --sign - "$APP" >/dev/null 2>&1 || true
+else
+    codesign --force --options runtime --timestamp \
+        --sign "$SIGN_IDENTITY" "$APP"
+    codesign --verify --strict --verbose=2 "$APP"
+fi
 
 echo "Built $APP"
 echo "Open it with:  open \"$APP\""
