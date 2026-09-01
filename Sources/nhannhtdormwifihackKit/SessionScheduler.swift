@@ -1,5 +1,12 @@
 import Foundation
 
+// macOS only. Most of this file is about managing which wireless network the
+// machine is on: the safety net, the backoff, and rejoining the hotspot when
+// the router goes quiet. None of that can be done from an iOS app, and a phone
+// does not need it because it falls back to cellular by itself. The phone runs
+// `SessionRenewer` instead, which is only the session-keeping half.
+#if os(macOS)
+
 /// Keeps the connection up, indefinitely.
 ///
 /// The router hands out a fixed session, fifteen minutes on this hotspot, and
@@ -427,3 +434,5 @@ public actor SessionScheduler {
         return Double(parts.seconds) + Double(parts.attoseconds) / 1e18
     }
 }
+
+#endif

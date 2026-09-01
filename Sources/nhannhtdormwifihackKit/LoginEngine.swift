@@ -58,10 +58,17 @@ public struct LoginEngine: Sendable {
             case .gatewayNotALoginPage:
                 return "The router answered, but not with a hotspot login page."
             case .noPortalURL:
-                return """
-                    The router's login page names no portal, and no fallback is set. \
-                    Set portal_fallback_url in the settings file.
-                    """
+                #if os(iOS)
+                    return """
+                        The router's login page names no portal, and no fallback is set. \
+                        Type the portal address into Settings.
+                        """
+                #else
+                    return """
+                        The router's login page names no portal, and no fallback is set. \
+                        Set portal_fallback_url in the settings file.
+                        """
+                #endif
             case .portalRejected(let step, let status):
                 return "The portal answered \(step) with HTTP \(status)."
             case .noLoginForm:

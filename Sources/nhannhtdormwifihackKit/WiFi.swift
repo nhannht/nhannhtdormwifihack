@@ -1,50 +1,19 @@
 import Foundation
 
+// Everything below is macOS only, and there is no iOS equivalent to write.
+//
+// Joining a network by name needs the list of networks the device has already
+// saved, and iOS does not publish that list to an app at all. Its own
+// replacement, `NEHotspotConfiguration`, joins a network the app names the
+// password for, which is a different thing: it cannot reach a network the
+// user saved by hand. A phone does not need this anyway, because when the
+// wireless network stops carrying traffic iOS falls back to cellular on its
+// own. That fallback is what `WiFiJoiner` exists to imitate on a Mac.
+#if os(macOS)
+
 #if canImport(CoreWLAN)
     import CoreWLAN
 #endif
-
-/// The router this machine currently sends its traffic through.
-///
-/// The captive portal always sits on it, and its address is different on every
-/// network: one iNET network answers on `192.168.200.1`, another on `10.11.0.1`.
-/// Asking the system each time is what lets one settings file work on both
-/// without being edited in between, which a fixed address cannot do.
-public enum DefaultRoute {
-
-    public static func gateway() -> String? {
-        guard let output = Shell.run("/sbin/route", ["-n", "get", "default"], timeout: 5) else {
-            return nil
-        }
-
-        for line in output.split(separator: "\n") {
-            let halves = line.split(separator: ":", maxSplits: 1)
-            guard halves.count == 2,
-                  halves[0].trimmingCharacters(in: .whitespaces) == "gateway"
-            else { continue }
-
-            let address = halves[1].trimmingCharacters(in: .whitespaces)
-            return address.isEmpty ? nil : address
-        }
-
-        return nil
-    }
-
-    /// Wait for a default route to exist, for up to `seconds`.
-    ///
-    /// Joining a network returns as soon as the radio associates, which is
-    /// several seconds before DHCP hands out an address and installs a route.
-    /// Asking for the router inside that gap gets nothing, and reporting "no
-    /// network at all" then is wrong: the network is a few seconds away from
-    /// being ready.
-    public static func waitForGateway(upTo seconds: Int = 20) async -> String? {
-        for _ in 0..<max(seconds, 1) {
-            if let found = gateway() { return found }
-            try? await Task.sleep(for: .seconds(1))
-        }
-        return gateway()
-    }
-}
 
 /// Joining a wireless network by name.
 ///
@@ -224,3 +193,5 @@ public actor WiFiJoiner {
         }
     }
 }
+
+#endif
