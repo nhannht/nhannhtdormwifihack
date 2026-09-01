@@ -269,20 +269,6 @@
                 .padding(10)
             }
             .frame(minWidth: 560, minHeight: 320)
-            .onAppear(perform: comeToFront)
-        }
-
-        /// Put this window in front of whatever the user was doing.
-        ///
-        /// An app with no dock icon is never the active app, so opening a window
-        /// is not enough on its own: it appears behind everything and looks like
-        /// nothing happened. Activating has to come after the window exists,
-        /// which is why it is here and not in the menu item that opened it.
-        private func comeToFront() {
-            NSApplication.shared.activate(ignoringOtherApps: true)
-            NSApplication.shared.windows
-                .first { $0.title == "Dorm WiFi Log" }?
-                .makeKeyAndOrderFront(nil)
         }
     }
 
@@ -373,11 +359,32 @@
 
                 hotspotPicker
 
-                Button("Show Log") { openWindow(id: "log") }
+                Button("Show Log") { showLog() }
 
                 Divider()
                 Button("Quit") { NSApplication.shared.terminate(nil) }
             }
+        }
+
+        /// Open the log window and put it in front of whatever the user was
+        /// doing.
+        ///
+        /// Both halves are needed. `openWindow` creates the window, or, when it
+        /// is already open, brings it to the front of this app's own windows.
+        /// But this app has no dock icon, so it is never the active app, and
+        /// being at the front of a background app means being behind everything
+        /// on screen. Activating is what makes "front" mean what it looks like.
+        ///
+        /// This used to live in the window's own `onAppear`, which is why Show
+        /// Log worked once and then stopped: `onAppear` runs when the view is
+        /// created, and a window that is merely buried under Safari has not been
+        /// created again, so nothing ever activated the app. Measured on macOS
+        /// 27 with a copy of this scene: with the window open and the app
+        /// inactive, `openWindow` alone left `NSApp.isActive` false and the
+        /// window not key; activating first made both true.
+        private func showLog() {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            openWindow(id: "log")
         }
 
         /// Choose which network the watcher signs in to.
