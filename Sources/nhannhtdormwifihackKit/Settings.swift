@@ -282,11 +282,51 @@ extension Settings {
 
 extension Settings {
 
-    /// `~/Library/Application Support/nhannhtdormwifihack/`
-    public static var supportDirectory: URL {
+    /// The app group the phone app and its tunnel share.
+    ///
+    /// The tunnel runs in its own process with its own private container, so a
+    /// settings file written by the app is invisible to it. They have to agree
+    /// on one place or the loop in the tunnel signs in using a different router
+    /// address from the one the user typed into the app and nothing says why.
+    public static let appGroup = "group.vn.io.nhannht.dormwifihack"
+
+    /// The shared container, or nil where there is nothing to share with.
+    ///
+    /// Only the phone has a second process. On the Mac the menu bar app and the
+    /// command line tool are one watcher at a time, kept apart by `RunLock`, and
+    /// they have used Application Support since the beginning.
+    ///
+    /// The platform check is not a shortcut for asking the system. Asking does
+    /// not work: `containerURL(forSecurityApplicationGroupIdentifier:)` answers
+    /// "here is where that group would live", not "you may use it", and on a Mac
+    /// it hands back
+    /// `~/Library/Group Containers/group.vn.io.nhannht.dormwifihack` to an
+    /// ordinary unsigned tool that has no such entitlement. The folder does not
+    /// exist, the tool is not allowed to create it, and every write then fails.
+    /// Measured on macOS 27, 2026-09-01: the call returned that path and writing
+    /// into it failed, which showed up as "You don't have permission to save the
+    /// file" from the command line tool and, worse, as an activity log that
+    /// silently stopped being written, because `ActivityLog` writes with `try?`.
+    private static var sharedDirectory: URL? {
+        #if os(iOS)
+            FileManager.default
+                .containerURL(forSecurityApplicationGroupIdentifier: appGroup)?
+                .appendingPathComponent("nhannhtdormwifihack", isDirectory: true)
+        #else
+            nil
+        #endif
+    }
+
+    /// The app's own container: `~/Library/Application Support/nhannhtdormwifihack/`
+    private static var privateDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first ?? FileManager.default.temporaryDirectory
         return base.appendingPathComponent("nhannhtdormwifihack", isDirectory: true)
+    }
+
+    /// Where the settings and the log live.
+    public static var supportDirectory: URL {
+        sharedDirectory ?? privateDirectory
     }
 
     public static var defaultURL: URL {
@@ -295,9 +335,28 @@ extension Settings {
 
     /// Load from disk, or hand back defaults when there is nothing there yet.
     public static func load(from url: URL = defaultURL) throws -> Settings {
-        guard FileManager.default.fileExists(atPath: url.path) else { return Settings() }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            // Nothing in the shared container. An install that predates the
+            // tunnel wrote its settings into the app's private container
+            // instead, and silently starting from defaults would throw away the
+            // portal address the user typed in to make this work at all.
+            if let carried = try carryForwardFromPrivateContainer(to: url) { return carried }
+            return Settings()
+        }
         let decoder = JSONDecoder()
         return try decoder.decode(Settings.self, from: Data(contentsOf: url))
+    }
+
+    /// Move a settings file left behind in the app's own container, once.
+    private static func carryForwardFromPrivateContainer(to url: URL) throws -> Settings? {
+        guard sharedDirectory != nil else { return nil }
+
+        let old = privateDirectory.appendingPathComponent("settings.json")
+        guard FileManager.default.fileExists(atPath: old.path) else { return nil }
+
+        let settings = try JSONDecoder().decode(Settings.self, from: Data(contentsOf: old))
+        try settings.save(to: url)
+        return settings
     }
 
     public func save(to url: URL = defaultURL) throws {

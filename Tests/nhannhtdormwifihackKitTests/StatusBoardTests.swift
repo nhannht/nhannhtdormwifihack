@@ -54,6 +54,42 @@ struct StatusBoardTests {
         #expect(status.headline == "Signed in, 0s left")
     }
 
+    @Test("A heartbeat that found the same session again is not a change")
+    func heartbeatIsNotAChange() {
+        // The widget is reloaded whenever this says the state changed, and
+        // WidgetKit allows only a few dozen reloads a day. The watcher rewrites
+        // the deadline every minute from a fresh reading of the same session,
+        // which moves it by a second or two, so comparing the two statuses
+        // whole would spend the whole day's allowance before lunch.
+        var earlier = WatcherStatus()
+        earlier.connection = .signedIn
+        earlier.expiresAt = Date().addingTimeInterval(600)
+
+        var later = earlier
+        later.expiresAt = earlier.expiresAt?.addingTimeInterval(2)
+
+        #expect(!later.differsMateriallyFrom(earlier))
+    }
+
+    @Test("A new session is a change, and so is signing out")
+    func newSessionIsAChange() {
+        var signedIn = WatcherStatus()
+        signedIn.connection = .signedIn
+        signedIn.expiresAt = Date().addingTimeInterval(30)
+
+        // The router issued a fresh 15 minutes. Anything showing the old
+        // deadline is now showing a session that has ended.
+        var renewed = signedIn
+        renewed.expiresAt = Date().addingTimeInterval(15 * 60)
+        #expect(renewed.differsMateriallyFrom(signedIn))
+
+        // Losing the session entirely, with no deadline left to show.
+        var signedOut = signedIn
+        signedOut.connection = .signingIn
+        signedOut.expiresAt = nil
+        #expect(signedOut.differsMateriallyFrom(signedIn))
+    }
+
     @Test("Being on the fallback network only counts as healthy with internet")
     func fallbackHealthNeedsInternet() {
         // The icon is the at-a-glance signal. Showing it as healthy while the

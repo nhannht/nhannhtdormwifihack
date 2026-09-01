@@ -26,7 +26,57 @@ public struct LogEntry: Sendable, Identifiable, Equatable {
         "[\(Self.timeFormatter.string(from: date))] \(message)"
     }
 
-    private static let timeFormatter: DateFormatter = {
+    /// The same line as written to disk: `s [16:57:55] Logged in.`
+    ///
+    /// The leading letter is the level. On the phone this file is the only
+    /// channel between the tunnel and the app, which are separate processes, so
+    /// a line that loses its level arrives on screen as ordinary news even when
+    /// it is a failure.
+    public var forFile: String {
+        "\(level.rawValue.prefix(1)) \(formatted)"
+    }
+
+    /// Read a line back, in either the current shape or the older one that had
+    /// no level on the front.
+    ///
+    /// Returns nil for anything that is not a log line, such as the
+    /// `--- session started at ... ---` banner.
+    public static func parse(fileLine line: String, on day: Date = Date()) -> LogEntry? {
+        var rest = Substring(line)
+        var level = Level.info
+
+        if rest.count > 2, rest.dropFirst(1).first == " ",
+           let first = rest.first,
+           let found = Level.allCases.first(where: { $0.rawValue.hasPrefix(String(first)) })
+        {
+            level = found
+            rest = rest.dropFirst(2)
+        }
+
+        guard rest.first == "[", let close = rest.firstIndex(of: "]") else { return nil }
+
+        let clock = String(rest[rest.index(after: rest.startIndex)..<close])
+        guard let time = timeFormatter.date(from: clock) else { return nil }
+
+        let message = String(rest[rest.index(after: close)...])
+            .trimmingCharacters(in: .whitespaces)
+        guard !message.isEmpty else { return nil }
+
+        // The file stores a clock time and no date, so put it on `day`. Reading
+        // yesterday's tail would otherwise stamp every line with 1 January 2000
+        // and sort the list into nonsense.
+        let parts = Calendar.current.dateComponents([.hour, .minute, .second], from: time)
+        let dated = Calendar.current.date(
+            bySettingHour: parts.hour ?? 0,
+            minute: parts.minute ?? 0,
+            second: parts.second ?? 0,
+            of: day
+        ) ?? day
+
+        return LogEntry(date: dated, level: level, message: message)
+    }
+
+    static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "HH:mm:ss"
         f.locale = Locale(identifier: "en_US_POSIX")
@@ -82,6 +132,46 @@ public actor ActivityLog {
 
     /// How much history to keep on disk, in bytes.
     private static let longestKeptFile = 512 * 1024
+
+    /// Append one line straight to the file, without going through the actor.
+    ///
+    /// For last words only. A tunnel being shut down has to hand control back
+    /// to iOS immediately and the process can be gone a moment later, so a line
+    /// handed to an actor is a line that never reaches the disk. That line is
+    /// also the only evidence of why the tunnel stopped, which makes losing it
+    /// the worst possible outcome.
+    public static func appendDirectly(
+        _ level: LogEntry.Level, _ message: String, to url: URL
+    ) {
+        let line = LogEntry(level: level, message: message).forFile + "\n"
+        guard let data = line.data(using: .utf8) else { return }
+
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+        } else {
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
+    /// The last `limit` lines of a log file, as entries.
+    ///
+    /// This is how the app sees what the tunnel did. They are separate
+    /// processes, so nothing the tunnel logs arrives through `subscribe()`; the
+    /// file both of them append to is the only thing they share.
+    public static func entriesInFile(at url: URL, limit: Int = 300) -> [LogEntry] {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+        return text
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .suffix(limit * 2)
+            .compactMap { LogEntry.parse(fileLine: String($0)) }
+            .suffix(limit)
+    }
 
     /// Keep only the last `bytes` of the file, starting at a line boundary.
     private static func trim(_ url: URL, to bytes: Int) {
@@ -153,7 +243,7 @@ public actor ActivityLog {
 
     private func appendToFile(_ entry: LogEntry) {
         guard let fileURL else { return }
-        guard let data = (entry.formatted + "\n").data(using: .utf8) else { return }
+        guard let data = (entry.forFile + "\n").data(using: .utf8) else { return }
 
         if let handle = try? FileHandle(forWritingTo: fileURL) {
             defer { try? handle.close() }
