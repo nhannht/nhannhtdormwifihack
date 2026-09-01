@@ -95,6 +95,11 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         ActivityLog.appendDirectly(
             .warning, "Tunnel stopped: \(Self.plainEnglish(reason)).", to: Self.logURL
         )
+
+        // The Control Center toggle and the widget are both now showing a
+        // watcher that no longer exists, and this is the only moment anything
+        // knows that.
+        Displays.refresh()
         completionHandler()
     }
 
@@ -105,7 +110,15 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
         loop = Task {
             await log.success("Tunnel is up.")
-            await SessionRenewer(settings: settings, log: log, home: .tunnel).run()
+            await SessionRenewer(
+                settings: settings,
+                log: log,
+                home: .tunnel,
+                // Poke the widget when the session changes. It cannot read the
+                // status file on its own schedule, so without this it would go
+                // on showing the deadline of a session that ended.
+                announce: { Displays.refresh() }
+            ).run()
         }
     }
 

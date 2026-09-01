@@ -60,6 +60,20 @@ enum TunnelSwitch {
         try await installed().connection.startVPNTunnel()
     }
 
+    /// Flip a configuration that is already there, and say whether there was
+    /// one. The manager never leaves this actor: it is not `Sendable`, and the
+    /// Control Center toggle's action runs outside any actor at all.
+    static func flip(on: Bool) async throws -> Bool {
+        guard let connection = try await existing()?.connection else { return false }
+
+        if on {
+            try connection.startVPNTunnel()
+        } else {
+            connection.stopVPNTunnel()
+        }
+        return true
+    }
+
     /// Whether the tunnel is up, asked of the system rather than read from a
     /// file. The file says what the loop last found; this says whether the loop
     /// exists at all, which is the question a toggle is asking.

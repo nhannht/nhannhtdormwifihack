@@ -69,10 +69,12 @@ final class TunnelController {
         } catch {
             problem = Self.plainEnglish(error)
         }
+        Displays.refresh()
     }
 
     func stop() {
         manager?.connection.stopVPNTunnel()
+        Displays.refresh()
     }
 
     /// Delete the configuration entirely. The complete undo.
@@ -83,6 +85,7 @@ final class TunnelController {
         status = .invalid
         watching?.cancel()
         watching = nil
+        Displays.refresh()
     }
 
     // MARK: - Following it
@@ -99,6 +102,11 @@ final class TunnelController {
             for await _ in changes {
                 guard let self else { return }
                 self.status = connection.status
+
+                // The Control Center toggle is showing the same on-or-off state
+                // this line just changed, and it has no other way to hear about
+                // it than being told.
+                Displays.refresh()
             }
         }
     }

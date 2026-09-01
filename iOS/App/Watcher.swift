@@ -123,8 +123,14 @@ final class Watcher {
         Task { await forgetReminder() }
     }
 
+    /// A loop for this process, wired to tell the widget when things change.
     private func makeRenewer() -> SessionRenewer {
-        SessionRenewer(settings: settings, log: log, home: .appOnScreen)
+        SessionRenewer(
+            settings: settings,
+            log: log,
+            home: .appOnScreen,
+            announce: { Displays.refresh() }
+        )
     }
 
     /// Run the loop inside this app, unless the tunnel is already running one.

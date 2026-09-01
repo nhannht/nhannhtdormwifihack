@@ -66,6 +66,7 @@ targets:
       - package: nhannhtdormwifihackKit
         product: nhannhtdormwifihackKit
       - target: DormWiFiTunnel
+      - target: DormWiFiWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: vn.io.nhannht.dormwifihack
@@ -84,6 +85,7 @@ targets:
     platform: iOS
     sources:
       - path: Tunnel
+      - path: Shared/Displays.swift
     dependencies:
       - package: nhannhtdormwifihackKit
         product: nhannhtdormwifihackKit
@@ -121,3 +123,44 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: V3P5U9Z68M
 
+  # The widget and the Control Center toggle. One extension carries both,
+  # because WidgetKit hosts both and a second target would only be a second
+  # thing to sign.
+  #
+  # It has the packet-tunnel entitlement so the Control Center toggle can start
+  # and stop the tunnel. iOS runs a control's action in this process unless the
+  # app happens to be running, so without it the toggle would be a switch that
+  # cannot reach the thing it switches.
+  DormWiFiWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+      - path: Shared
+    dependencies:
+      - package: nhannhtdormwifihackKit
+        product: nhannhtdormwifihackKit
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Dorm WiFi
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widgets/DormWiFiWidgets.entitlements
+      properties:
+        com.apple.developer.networking.networkextension:
+          - packet-tunnel-provider
+        com.apple.security.application-groups:
+          - group.vn.io.nhannht.dormwifihack
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: vn.io.nhannht.dormwifihack.widgets
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: V3P5U9Z68M
