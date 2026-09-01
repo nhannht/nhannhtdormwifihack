@@ -17,6 +17,12 @@ APP="${1:-$HOME/Applications}/$NAME.app"
 # timestamp to be accepted.
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 
+# Stamped into the bundle so the app can say which build it is. Passed in by
+# release.sh, which already knows the number because it names the disk image
+# after it. Hardcoding it here meant a disk image called 1.1.0 could hold an app
+# that reported 1.0.0, and then nobody can tell which build they are running.
+VERSION="${VERSION:-0.0.0-dev}"
+
 swift build -c release --product nhannhtdormwifihack-menubar
 
 rm -rf "$APP"
@@ -24,7 +30,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp .build/release/nhannhtdormwifihack-menubar "$APP/Contents/MacOS/DormWiFi"
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -47,7 +53,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>$VERSION</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>

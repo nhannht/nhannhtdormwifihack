@@ -40,7 +40,7 @@ echo "Signing as: $SIGN_IDENTITY"
 rm -rf "$STAGE" "$DMG"
 mkdir -p "$STAGE"
 
-SIGN_IDENTITY="$SIGN_IDENTITY" ./build-app.sh "$STAGE"
+VERSION="$VERSION" SIGN_IDENTITY="$SIGN_IDENTITY" ./build-app.sh "$STAGE"
 
 # The app is notarized and stapled before it goes in the image, as well as the
 # image itself being notarized and stapled afterwards. Both are needed. The
