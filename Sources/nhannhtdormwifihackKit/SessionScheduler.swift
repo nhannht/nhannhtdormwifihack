@@ -28,25 +28,9 @@ import Foundation
 /// that refuses early renewal; it cannot be closed from here.
 public actor SessionScheduler {
 
-    /// How often to retry while the router is refusing, in seconds. Deliberately
-    /// impatient: `/login` starts answering the instant the old session goes,
-    /// and every attempt before that is free.
-    private static let retryEverySeconds = 2
-
-    /// Stop sleeping and start watching closely once the session has this many
-    /// seconds left, so the sign-in goes in as soon as the old one lapses.
-    private static let pounceSeconds = 5
-
-    /// How long to keep trying after a lapse before giving up on this pass.
-    private static let pounceRetrySeconds = 90
-
-    /// Never sleep longer than this, so a session that vanishes early is
-    /// noticed and stopping stays responsive.
-    private static let maximumSleep = 60
-
-    /// What to assume is left when the router reports an open session without
-    /// saying how long. Short on purpose: guessing high means missing the lapse.
-    private static let blindSleepSeconds = 30
+    /// When to look at the router. Shared with the phone's watcher, because
+    /// these numbers describe the router rather than the machine watching it.
+    private typealias Pacing = SessionPacing
 
     /// How long the internet may be gone before the safety net fires, in
     /// seconds. Set by the user at fifteen.
@@ -145,19 +129,17 @@ public actor SessionScheduler {
                 await report(.signedIn, router: settings.resolvingGateway().gatewayIP)
 
                 // The router's own number, not a clock kept here.
-                let left = info.remaining ?? Self.blindSleepSeconds
+                let left = info.remaining ?? Pacing.blindSleepSeconds
 
-                if left > Self.pounceSeconds {
-                    let nap = min(left - Self.pounceSeconds, Self.maximumSleep)
+                let nap = Pacing.napWhileActive(secondsLeft: left)
+                if left > Pacing.pounceSeconds {
                     await log.info(
                         "Signed in, \(ErrorText.duration(left)) left. Next check in \(nap)s."
                     )
-                    try? await Task.sleep(for: .seconds(max(nap, 1)))
-                } else {
-                    // On the boundary. Keep looking, closely, until the router
-                    // says the session has gone.
-                    try? await Task.sleep(for: .seconds(Self.retryEverySeconds))
                 }
+                // Past the boundary the nap is short on its own, so the loop
+                // keeps looking closely until the router says the session ended.
+                try? await Task.sleep(for: .seconds(nap))
 
             case .signedOut:
                 unreachableInARow = 0
@@ -196,7 +178,7 @@ public actor SessionScheduler {
                         """
                     )
                     unreachableInARow = 0
-                    try? await Task.sleep(for: .seconds(min(left, Self.maximumSleep)))
+                    try? await Task.sleep(for: .seconds(min(left, Pacing.maximumSleep)))
                     continue
                 }
 
@@ -327,7 +309,7 @@ public actor SessionScheduler {
     /// router what the truth is on its next pass rather than believing a return
     /// value from here, so there is no way for the two to get out of step.
     private func signInAndWait() async {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(Self.pounceRetrySeconds))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(Pacing.pounceRetrySeconds))
         let started = ContinuousClock.now
 
         while !Task.isCancelled {
@@ -335,7 +317,7 @@ public actor SessionScheduler {
 
             guard ContinuousClock.now < deadline else {
                 await log.failure(
-                    "Could not sign in within \(Self.pounceRetrySeconds)s. Still trying."
+                    "Could not sign in within \(Pacing.pounceRetrySeconds)s. Still trying."
                 )
                 return
             }
@@ -353,7 +335,7 @@ public actor SessionScheduler {
                 return
             }
 
-            try? await Task.sleep(for: .seconds(Self.retryEverySeconds))
+            try? await Task.sleep(for: .seconds(Pacing.retryEverySeconds))
         }
     }
 
