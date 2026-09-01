@@ -320,7 +320,16 @@ public struct LoginEngine: Sendable {
     {
         // The first visit sets the cookies every later call depends on, and can
         // redirect to whichever host actually serves the portal.
-        let landing = try await client.get(portalURL, timeout: 10)
+        //
+        // Five seconds, not ten. This request goes out at the exact instant the
+        // old session lapsed, which is the worst moment to ask the router to
+        // pass traffic to a host out on the internet, and it does sometimes
+        // hang. Measured on a phone on 2026-09-01: the attempt at the boundary
+        // stalled for the full ten seconds, the retry two seconds later
+        // finished the entire three step login in 0.4s. Waiting is what costs
+        // the user here, because retrying is free and works. The margin is
+        // still large: a working portal answers this in well under a second.
+        let landing = try await client.get(portalURL, timeout: 5)
         let finalURL = landing.finalURL
 
         guard var baseComponents = URLComponents(url: finalURL, resolvingAgainstBaseURL: false)
