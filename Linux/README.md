@@ -104,6 +104,7 @@ dormwifi              # sign in, then keep the session alive
 dormwifi run          # the same thing
 dormwifi login        # sign in once and exit
 dormwifi status       # am I signed in? is the internet up?
+dormwifi discover     # read the router's login page and look for the portal's address
 dormwifi logout       # end the session
 dormwifi install      # start at login, restart if it dies
 dormwifi uninstall    # stop doing that
@@ -162,7 +163,7 @@ directory:
 cd Linux && python3 -m unittest discover -s tests -t .
 ```
 
-171 tests, no network and no hotspot needed: the CHAP hashing against the same
+181 tests, no network and no hotspot needed: the CHAP hashing against the same
 golden value the Swift tests use, the HTML field scraper, the status page reader,
 the order the login steps go out in against a scripted router, the settings file
 round trip, the log, the run lock, the route arithmetic, and the window's wiring.

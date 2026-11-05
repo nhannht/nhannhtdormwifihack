@@ -191,6 +191,31 @@ def command_status(options: argparse.Namespace) -> int:
     return 0 if online else 1
 
 
+def command_discover(options: argparse.Namespace) -> int:
+    """Read the router's login page and say where the portal is, if anywhere."""
+    from . import discover
+    from .login_engine import LoginEngine
+
+    settings = _load(options).resolving_gateway_waiting_up_to(5)
+    if not settings.gateway_ip:
+        raise SettingsProblem("This machine has no network connection at all.")
+
+    console = Console
+    client = PortalClient()
+    try:
+        engine = LoginEngine(settings, ActivityLog())
+        page = engine.fetch_gateway(client)
+    except Exception as error:  # noqa: BLE001 - reported as a line, not a traceback
+        console.line(f"Router:     {settings.gateway_ip}")
+        console.line(f"Login page: could not be read: {error_text.short(error)}")
+        return 1
+
+    finding = discover.inspect(page.body, settings.gateway_ip)
+    for line in discover.render(finding, settings.gateway_ip):
+        console.line(line)
+    return 0 if finding.looks_like_login_page else 1
+
+
 def command_logout(options: argparse.Namespace) -> int:
     settings = _load(options).resolving_gateway()
     target = (
@@ -568,6 +593,12 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser(
         "status", parents=[shared], help="Report whether the session and the internet are up."
     ).set_defaults(handler=command_status)
+
+    subparsers.add_parser(
+        "discover",
+        parents=[shared],
+        help="Read the router's login page and look for the portal's address.",
+    ).set_defaults(handler=command_discover)
 
     subparsers.add_parser(
         "logout", parents=[shared], help="End the current session."

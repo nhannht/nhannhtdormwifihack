@@ -66,8 +66,9 @@ class EngineError(Exception):
     @classmethod
     def no_portal_url(cls) -> EngineError:
         return cls(
-            "The router's login page names no portal, and no fallback is set. "
-            "Set portal_fallback_url in the settings file."
+            "The router's login page names no portal, and no fallback is set. Run "
+            "'dormwifi discover' to read the page and find the address, then set it with "
+            "'dormwifi config set portal_fallback_url <address>'."
         )
 
     @classmethod
