@@ -144,6 +144,22 @@ dormwifi config set fallback_wifi_name "my phone"
 | `auto_connect` | Rejoin `wifi_name` when the router goes quiet | `true` |
 | `check_wifi_every_time` | Check the network every pass, not just once | `false` |
 
+### When the sign-in is a button in a browser popup
+
+Some hotspots authorize you by having a browser press a button. The request that
+button sends is the entire protocol, and the page carrying it is served only to a
+client the router already considers captive — so it cannot be fetched from
+outside, and the splash page the router does serve is a stub with no button in it.
+
+To make that one replayable, record it once while signing in by hand:
+
+```bash
+sudo Linux/tools/capture-login.sh      # then sign in through the popup, then Ctrl-C
+```
+
+That writes a pcap of the plain-HTTP login to `/tmp/dormwifi-login.pcap`. The
+request inside it is what the app has to send every fifteen minutes.
+
 ### When there is no portal to ask
 
 Some hotspots do not hand out accounts. They serve a splash page with a CHAP
