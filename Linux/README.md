@@ -144,6 +144,39 @@ dormwifi config set fallback_wifi_name "my phone"
 | `auto_connect` | Rejoin `wifi_name` when the router goes quiet | `true` |
 | `check_wifi_every_time` | Check the network every pass, not just once | `false` |
 
+### This hotspot: Awing Connect
+
+Worth writing down, because none of it is deducible from the pages involved.
+
+The dorm network (`INET - Free WiFi`, `WIFI INET 5G`) runs the **Awing Connect**
+captive portal. The router at `192.168.200.1` serves a splash page whose only job
+is to make the browser load a URL it builds in JavaScript:
+
+```
+http://v1.awingconnect.vn/login?serial=…&client_mac=…&client_ip=…
+      &userurl=…&login_url=http://192.168.200.1/login
+      &chap_id=\063&chap_challenge=\150\321…
+```
+
+That page is the portal, it is reachable over plain HTTP while captive (the
+walled garden allows exactly that host), and its JavaScript calls, in order:
+
+```
+POST /Home/VerifyUrl   GET /  POST /Content/GetCustomer
+POST /Content/GetCampaignHtml   POST /Analytic/Send
+```
+
+Those are the four endpoints this app already speaks, so it needs no code for
+this network — only one setting:
+
+```bash
+dormwifi config set portal_fallback_url "http://v1.awingconnect.vn"
+```
+
+The router's splash names no portal, so `discover` cannot find it: the address
+is built by JavaScript at run time. If the hostname ever changes, the way to
+recover it is to record one sign-in and read the requests — see below.
+
 ### When the sign-in is a button in a browser popup
 
 Some hotspots authorize you by having a browser press a button. The request that
