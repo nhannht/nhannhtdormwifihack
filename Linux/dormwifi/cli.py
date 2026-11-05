@@ -204,10 +204,17 @@ def command_discover(options: argparse.Namespace) -> int:
     client = PortalClient()
     try:
         engine = LoginEngine(settings, ActivityLog())
-        page = engine.fetch_gateway(client)
+        # The page only: resolving the portal is the step being diagnosed.
+        page = engine.fetch_login_page(client)
     except Exception as error:  # noqa: BLE001 - reported as a line, not a traceback
         console.line(f"Router:     {settings.gateway_ip}")
         console.line(f"Login page: could not be read: {error_text.short(error)}")
+        if "did not answer" in error_text.short(error):
+            console.line(
+                "            This router stops answering /login while a session is open. If "
+                "you are signed in, run 'dormwifi logout' first, or wait for the session to "
+                "lapse."
+            )
         return 1
 
     finding = discover.inspect(page.body, settings.gateway_ip)

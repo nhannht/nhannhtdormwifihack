@@ -183,6 +183,18 @@ class LoginEngine:
     # MARK: - Step 1
 
     def fetch_gateway(self, client: PortalClient) -> GatewayPage:
+        """The login page, read: challenge, portal address, and all."""
+        return self.gateway_page(self.fetch_login_page(client))
+
+    def fetch_login_page(self, client: PortalClient):
+        """The router's login page, and nothing read out of it yet.
+
+        Separate from :meth:`gateway_page` because the two things that can go
+        wrong here are worth telling apart. A page that answers but names no
+        portal is the page a person needs to *look at*, which is what
+        ``dormwifi discover`` does; resolving the portal first turned that into
+        an exception thrown before anything could be printed.
+        """
         if not self.settings.gateway_ip:
             raise EngineError.bad_url(self.settings.gateway_ip)
 
@@ -226,6 +238,10 @@ class LoginEngine:
                 else EngineError.gateway_unreachable(self.GATEWAY_ATTEMPTS)
             )
 
+        return page
+
+    def gateway_page(self, page) -> GatewayPage:
+        """Read the challenge and the portal's address out of that page."""
         chap_id = value_identified_by("chap-id", page.body)
         chap_challenge = value_identified_by("chap-challenge", page.body)
 

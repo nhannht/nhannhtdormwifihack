@@ -90,6 +90,46 @@ class InspectTests(unittest.TestCase):
         self.assertEqual(finding.candidates, ["http://portal.inet.vn"])
 
 
+class LoginPageTests(unittest.TestCase):
+    """`discover` must read a page that names no portal — that is its whole job."""
+
+    def scripted_client(self, body: str, status: int = 200):
+        from dormwifi.portal_client import PortalResponse
+
+        class Client:
+            def get(self, url, headers=None, timeout=None):  # noqa: ARG002
+                return PortalResponse(status_code=status, final_url=url, data=body.encode())
+
+        return Client()
+
+    def engine(self):
+        from dormwifi.activity_log import ActivityLog
+        from dormwifi.login_engine import LoginEngine
+        from dormwifi.settings import Settings
+
+        return LoginEngine(Settings(gateway_ip="192.168.200.1"), ActivityLog())
+
+    def test_a_page_naming_no_portal_is_returned_instead_of_raising(self):
+        # The bug this covers: discover asked the engine for the gateway, the
+        # engine resolved the portal, and resolving it raised — so the command
+        # died on the one page it exists to explain.
+        page = self.engine().fetch_login_page(self.scripted_client(PAGE_WITH_SCRIPT_PORTAL))
+        self.assertIn("chap-id", page.body)
+
+        finding = discover.inspect(page.body, "192.168.200.1")
+        self.assertEqual(finding.candidates, ["http://portal.inet.vn"])
+
+    def test_a_page_that_is_not_a_hotspot_still_raises(self):
+        from dormwifi.login_engine import EngineError
+
+        with self.assertRaises(EngineError):
+            self.engine().fetch_login_page(self.scripted_client(PAGE_NOT_A_HOTSPOT))
+
+    def test_reading_the_whole_gateway_still_resolves_the_portal(self):
+        gateway = self.engine().fetch_gateway(self.scripted_client(PAGE_WITH_FORM_ACTION))
+        self.assertEqual(gateway.portal_url.split("?")[0], "http://portal.example.test/login")
+
+
 class RenderTests(unittest.TestCase):
     def test_the_report_prints_the_command_that_sets_the_address(self):
         finding = discover.inspect(PAGE_WITH_SCRIPT_PORTAL, "192.168.200.1")
