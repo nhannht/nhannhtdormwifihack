@@ -55,18 +55,22 @@ class PortalResponse:
         return json.loads(self.data.decode("utf-8", "replace"))
 
 
-class _AcceptEveryStatus(urllib.request.HTTPErrorProcessor):
+class _AcceptEveryStatus(urllib.request.HTTPDefaultErrorHandler):
     """Hand back 4xx and 5xx instead of raising.
 
     The login sequence reads status codes: a 502 from the portal is reported as
     "the portal answered VerifyUrl with HTTP 502", which is actionable, while a
     raised exception would arrive as a transport failure.
+
+    This replaces the *default error handler*, not the error processor. The
+    processor is what hands a 3xx to the redirect handler, so replacing that
+    instead — which this did — silently stopped following redirects, and a
+    hotspot that answers `/status` with `302 /login` then reads as "the router
+    did not answer" forever. That is exactly what this hotspot does.
     """
 
-    def http_response(self, request, response):  # noqa: D102 - interface method
+    def http_error_default(self, request, response, code, msg, headers):
         return response
-
-    https_response = http_response
 
 
 class _GatewayTrust(urllib.request.HTTPSHandler):
