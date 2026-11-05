@@ -42,6 +42,8 @@ DECLARED_KEYS = frozenset(
         "version_meta",
         "gemini_api_key",
         "ai_model",
+        "username",
+        "password",
     }
 )
 
@@ -115,6 +117,17 @@ class Settings:
     #: or it cannot be rejoined from here. Empty means there is no net and a
     #: failed join leaves you offline.
     fallback_wifi_name: str = ""
+
+    #: An account to sign in with, straight at the router.
+    #:
+    #: Set these and the portal is never contacted. That matters on hotspots
+    #: where the portal cannot be reached until *after* signing in — the router
+    #: intercepts every plain request and resets TLS — so a portal-issued account
+    #: is impossible to obtain from the captive side. Typed once here, the
+    #: sign-in and every renewal after it happen with no page, no advert and
+    #: nothing to approve.
+    username: str = ""
+    password: str = ""
 
     #: Where to send the login when the router's page carries no form action.
     portal_fallback_url: str = ""
@@ -220,6 +233,8 @@ class Settings:
             portal_fallback_url=_string(
                 payload.get("portal_fallback_url"), default.portal_fallback_url
             ),
+            username=_string(payload.get("username"), default.username),
+            password=_string(payload.get("password"), default.password),
             portal_endpoints=endpoints,
             destination_url=_string(payload.get("destination_url"), default.destination_url),
             logout_url=_string(payload.get("logout_url"), default.logout_url),
@@ -247,6 +262,8 @@ class Settings:
             "check_interval_secs": self.check_interval_secs,
             "fallback_wifi_name": self.fallback_wifi_name,
             "portal_fallback_url": self.portal_fallback_url,
+            "username": self.username,
+            "password": self.password,
             "portal_endpoints": self.portal_endpoints.to_json(),
             "destination_url": self.destination_url,
             "logout_url": self.logout_url,

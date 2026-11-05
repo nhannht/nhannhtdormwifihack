@@ -133,6 +133,8 @@ dormwifi config set fallback_wifi_name "my phone"
 |---|---|---|
 | `wifi_name` | The network to stay on | empty |
 | `fallback_wifi_name` | The safety net network. Empty turns the net off | empty |
+| `username` | An account to sign in with, straight at the router | empty |
+| `password` | Its password. Set both and the portal is never contacted | empty |
 | `gateway_ip` | The router. Empty means ask this machine | empty |
 | `interval` | How many minutes a session lasts | `15` |
 | `check_interval_secs` | How often to look at the connection | `2` |
@@ -141,6 +143,23 @@ dormwifi config set fallback_wifi_name "my phone"
 | `logout_url` | An explicit logout address, if there is one | empty |
 | `auto_connect` | Rejoin `wifi_name` when the router goes quiet | `true` |
 | `check_wifi_every_time` | Check the network every pass, not just once | `false` |
+
+### When there is no portal to ask
+
+Some hotspots do not hand out accounts. They serve a splash page with a CHAP
+challenge and nothing else — no form action, no advert API — and while the client
+is captive the router intercepts every plain request and resets TLS to any portal
+host, so an account cannot be fetched from the captive side at all. On those,
+`username` and `password` in the settings file are the whole story: the app reads
+the challenge from the router, hashes the password against it, and posts. No
+page, no popup, nothing to approve, every fifteen minutes forever.
+
+```bash
+dormwifi config set username "your account"
+dormwifi config set password "your password"     # not echoed
+```
+
+`dormwifi config show` will print the password; the file is mode 0600.
 
 **Do not set `gateway_ip`.** Leaving it empty means "ask this machine which
 router it is using right now", and that is almost always what you want.
@@ -163,7 +182,7 @@ directory:
 cd Linux && python3 -m unittest discover -s tests -t .
 ```
 
-181 tests, no network and no hotspot needed: the CHAP hashing against the same
+186 tests, no network and no hotspot needed: the CHAP hashing against the same
 golden value the Swift tests use, the HTML field scraper, the status page reader,
 the order the login steps go out in against a scripted router, the settings file
 round trip, the log, the run lock, the route arithmetic, and the window's wiring.

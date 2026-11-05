@@ -79,6 +79,31 @@ class LoginOrderTests(unittest.TestCase):
         self.assertEqual(router.asked, ["/status"])
         self.assertNotIn("/login", router.asked)
 
+    def test_an_account_in_the_settings_never_touches_the_portal(self):
+        # On a hotspot that intercepts every request and resets TLS while
+        # captive, the portal cannot be reached from the side that needs it. An
+        # account typed in once has to be enough: the router gets the CHAP hash
+        # and nothing else is asked of anyone.
+        subject = settings()
+        subject.username = "qgv785141"
+        subject.password = "qgv785141"
+
+        router = ScriptedRouter(
+            {
+                "/status": "<html><body>Signed out</body></html>",
+                "/login": '<form><input id="chap-id" value="\\362">'
+                          '<input id="chap-challenge" value="\\001"></form>',
+            }
+        )
+        result = LoginEngine(subject, ActivityLog()).run(router)
+
+        # The outcome, not just the traffic: an earlier version of this test
+        # checked only which URLs were touched, so it passed while the login was
+        # in fact failing on a demand for the portal's address.
+        self.assertTrue(result.is_connected, result.summary)
+        self.assertIn("/login", router.asked)
+        self.assertTrue(all(path in ("/status", "/login") for path in router.asked), router.asked)
+
     def test_once_the_session_has_lapsed_login_is_asked_for(self):
         router = ScriptedRouter(
             {

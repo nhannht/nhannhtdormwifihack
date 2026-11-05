@@ -151,11 +151,33 @@ class LoginEngine:
 
         try:
             self.log.info("Step 1 of 3: asking the router for its login page")
-            gateway = self.fetch_gateway(client)
+            page = self.fetch_login_page(client)
 
-            self.log.info("Step 2 of 3: collecting an account from the portal")
-            credentials = self.fetch_credentials(gateway.portal_url, client)
-            self.log.info(f"Portal issued the account {credentials.username}")
+            gateway: GatewayPage
+            credentials: Credentials
+            if self.settings.username:
+                # The account is in the settings file, so there is no portal to
+                # ask and nothing to approve. The portal's address is not
+                # resolved at all here: on a hotspot that intercepts every
+                # request and resets TLS while captive, the portal cannot be
+                # reached from the side that needs it, and demanding its address
+                # would make a known account useless.
+                chap_id, chap_challenge = self.read_challenge(page)
+                gateway = GatewayPage(
+                    chap_id=chap_id, chap_challenge=chap_challenge, portal_url=""
+                )
+                self.log.info("Step 2 of 3: using the account from the settings file")
+                credentials = Credentials(
+                    username=self.settings.username,
+                    password=self.settings.password,
+                    dst=self.settings.destination_url,
+                    popup="false",
+                )
+            else:
+                gateway = self.gateway_page(page)
+                self.log.info("Step 2 of 3: collecting an account from the portal")
+                credentials = self.fetch_credentials(gateway.portal_url, client)
+                self.log.info(f"Portal issued the account {credentials.username}")
 
             self.log.info("Step 3 of 3: signing in to the router")
             return self.sign_in(gateway, credentials, client)
@@ -240,8 +262,8 @@ class LoginEngine:
 
         return page
 
-    def gateway_page(self, page) -> GatewayPage:
-        """Read the challenge and the portal's address out of that page."""
+    def read_challenge(self, page) -> tuple[str | None, str | None]:
+        """The router's CHAP fields, and a line about whether it gave any."""
         chap_id = value_identified_by("chap-id", page.body)
         chap_challenge = value_identified_by("chap-challenge", page.body)
 
@@ -250,6 +272,17 @@ class LoginEngine:
         else:
             self.log.warning("Router issued no CHAP challenge; will send a plain hash")
 
+        return chap_id, chap_challenge
+
+    def gateway_page(self, page) -> GatewayPage:
+        """Read the challenge and the portal's address out of that page.
+
+        Only for the portal path. With an account in the settings file the portal
+        is never contacted, so its address is not required — and demanding one
+        anyway is what made a hotspot with no portal on its login page
+        impossible to use even when the account was known.
+        """
+        chap_id, chap_challenge = self.read_challenge(page)
         portal_url = self.portal_url_from(page.body)
         self.log.info(f"Portal is at {urlsplit(portal_url).hostname or portal_url}")
 

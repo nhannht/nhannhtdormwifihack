@@ -39,6 +39,14 @@ class SettingsFileTests(unittest.TestCase):
         self.assertIn("fallback_wifi_name", text)
         self.assertEqual(Settings.load(self.path).fallback_wifi_name, "Some Saved Hotspot")
 
+    def test_an_account_survives_a_save_and_a_load(self):
+        settings = Settings(username="qgv785141", password="not-a-real-one")
+        settings.save(self.path)
+
+        again = Settings.load(self.path)
+        self.assertEqual(again.username, "qgv785141")
+        self.assertEqual(again.password, "not-a-real-one")
+
     def test_the_file_is_readable_only_by_its_owner(self):
         Settings().save(self.path)
         self.assertEqual(os.stat(self.path).st_mode & 0o777, 0o600)

@@ -34,6 +34,8 @@ _SETTABLE_KEYS = (
     "check_wifi_every_time",
     "gemini_api_key",
     "ai_model",
+    "username",
+    "password",
 )
 
 
@@ -281,7 +283,7 @@ def _config_set(options: argparse.Namespace) -> int:
 
     # A secret is not echoed. This line goes to the terminal, into shell history,
     # and for the installed service into the journal.
-    if key in ("gemini_api_key",):
+    if key in ("gemini_api_key", "password"):
         Console.line(f"Set {key}.")
     else:
         Console.line(f"Set {key} to {value}.")
