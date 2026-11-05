@@ -206,8 +206,11 @@ class WindowTests(unittest.TestCase):
         try:
             self.assertTrue(observer._observing)
             self.assertIsNone(observer._scheduler)
-            self.assertFalse(observer._toggle_button.get_sensitive())
-            self.assertIn("Another watcher is already running", observer._message.get_text())
+            # Not a row of grey buttons: with nothing to press, the window says
+            # why in the place the buttons were.
+            self.assertFalse(observer._actions.get_visible())
+            self.assertIn("Another watcher is running", observer._action_hint.get_text())
+            self.assertIn("only shows its status", observer._action_hint.get_text())
         finally:
             observer.shutdown()
             holder.release()
@@ -256,6 +259,46 @@ class WindowTests(unittest.TestCase):
 
         self.assertFalse(keep_open)
         self.assertEqual(quit_called, [True])
+
+    def test_the_two_actions_explain_themselves(self):
+        # "Why is this grey?" has to be answerable without reading the code: the
+        # line under the buttons says what each one does.
+        hint = self.window._action_hint.get_text()
+        self.assertIn("Pause stops the automatic sign-in", hint)
+        self.assertIn("Sign in now tries once", hint)
+        self.assertTrue(self.window._toggle_button.get_tooltip_text())
+        self.assertTrue(self.window._sign_in_button.get_tooltip_text())
+
+    def test_the_useless_logout_action_is_gone(self):
+        # This router stops answering /login once a session is ended, so a Log
+        # out button could only strand the machine. The CLI still has the command,
+        # for an explicit, deliberate use.
+        self.assertFalse(hasattr(self.window, "_logout_button"))
+        self.assertFalse(hasattr(self.window, "_on_logout"))
+
+    def test_both_actions_are_available_while_the_watcher_runs(self):
+        # Signing in by hand while the watcher runs is a legitimate action, not
+        # something to grey out: the watcher is waiting for a lapse and this asks
+        # for one now.
+        class FakeScheduler:
+            def stop(self):
+                pass
+
+        self.window._scheduler = FakeScheduler()
+        self.assertTrue(self.window._sign_in_button.get_sensitive())
+        self.assertTrue(self.window._toggle_button.get_sensitive())
+
+    def test_a_sign_in_that_fails_still_gives_the_button_back(self):
+        # The button is disabled while the work runs; the only thing that
+        # re-enables it is the callback. A worker that raises must still call it.
+        self.window._sign_in_button.set_sensitive(False)
+        self.window._sign_in_button.set_label("Signing in…")
+
+        self.window._finish_sign_in("Sign-in stopped unexpectedly: boom", False)
+
+        self.assertTrue(self.window._sign_in_button.get_sensitive())
+        self.assertEqual(self.window._sign_in_button.get_label(), "Sign in now")
+        self.assertIn("boom", self.window._message.get_text())
 
     def test_pausing_from_the_tray_presses_the_same_button(self):
         class FakeScheduler:

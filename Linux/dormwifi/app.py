@@ -202,20 +202,38 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
         self._message.set_visible(False)
         outer.append(self._message)
 
-        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        # Two actions, both of which work on this hotspot. There used to be a
+        # third, Log out: it is gone because this router stops answering /login
+        # the moment a session is ended, so the button could only strand the
+        # machine. Signing in again is what the app is for; leaving is not
+        # something it can do safely.
+        self._actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self._toggle_button = Gtk.Button(label="Pause auto-connect")
+        self._toggle_button.set_tooltip_text(
+            "Stop or start signing in again each time the session lapses."
+        )
         self._toggle_button.connect("clicked", self._on_toggle_watcher)
-        buttons.append(self._toggle_button)
+        self._actions.append(self._toggle_button)
 
         self._sign_in_button = Gtk.Button(label="Sign in now")
+        self._sign_in_button.set_tooltip_text(
+            "Sign in immediately, through the portal, without waiting for the session to lapse."
+        )
         self._sign_in_button.connect("clicked", self._on_sign_in_now)
-        buttons.append(self._sign_in_button)
+        self._actions.append(self._sign_in_button)
 
-        self._logout_button = Gtk.Button(label="Log out")
-        self._logout_button.connect("clicked", self._on_logout)
-        buttons.append(self._logout_button)
+        outer.append(self._actions)
 
-        outer.append(buttons)
+        # What the two buttons do, in one line, so a disabled control never has
+        # to be decoded. The same label carries the explanation when another
+        # watcher owns the connection and there is nothing here to press.
+        self._action_hint = Gtk.Label(
+            label="Pause stops the automatic sign-in. Sign in now tries once, immediately.",
+            xalign=0,
+            wrap=True,
+        )
+        self._action_hint.add_css_class("detail")
+        outer.append(self._action_hint)
 
         hotspot_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         hotspot_label = Gtk.Label(label="Hotspot network")
@@ -357,9 +375,14 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
                 "info",
                 persistent=True,
             )
-            self._toggle_button.set_sensitive(False)
-            self._sign_in_button.set_sensitive(False)
-            self._logout_button.set_sensitive(False)
+            # No controls, rather than three grey ones: a disabled button
+            # cannot say why it is disabled, and this window cannot pause, start
+            # or sign in to a watcher that is not its own.
+            self._actions.set_visible(False)
+            self._action_hint.set_text(
+                "Another watcher is running — a terminal, or the installed service — so this "
+                "window only shows its status. Stop that one to control the watcher from here."
+            )
             self._load_observer_status()
             GLib.timeout_add(1000, self._poll_status_file)
             return
@@ -638,7 +661,19 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
         self._say(f"Signing in through {settings.gateway_ip}…", "info", persistent=True)
 
         def work() -> None:
-            result = LoginEngine(settings, self._log).run()
+            # The button is disabled while this runs, and only the callback below
+            # enables it again. A sign-in that raised would therefore leave a
+            # button that never comes back, which reads as a broken window long
+            # after the real failure is forgotten.
+            try:
+                result = LoginEngine(settings, self._log).run()
+            except Exception as error:  # noqa: BLE001 - always answer the button
+                GLib.idle_add(
+                    self._finish_sign_in,
+                    f"Sign-in stopped unexpectedly: {error_text.short(error)}",
+                    False,
+                )
+                return
             GLib.idle_add(self._finish_sign_in, result.summary, result.is_connected)
 
         threading.Thread(target=work, name="sign-in", daemon=True).start()
@@ -651,34 +686,6 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
     def _progress_done(self) -> None:
         self._sign_in_button.set_sensitive(True)
         self._sign_in_button.set_label("Sign in now")
-
-    def _on_logout(self, _button: Gtk.Button) -> None:
-        try:
-            settings = Settings.load(self._settings_path).resolving_gateway()
-        except (OSError, ValueError) as error:
-            self._say(f"Cannot read the settings file: {error_text.short(error)}", "error")
-            return
-
-        self._logout_button.set_sensitive(False)
-        self._say("Ending the session…", "info", persistent=True)
-
-        def work() -> None:
-            target = settings.logout_url or f"http://{settings.gateway_ip}/logout"
-            try:
-                response = PortalClient().get(target, timeout=5)
-                message = f"Logged out (HTTP {response.status_code})."
-                ok = response.is_success
-            except Exception as error:  # noqa: BLE001 - reported, never raised
-                message = f"Could not reach {target}: {error_text.short(error)}"
-                ok = False
-            GLib.idle_add(self._finish_logout, message, ok)
-
-        threading.Thread(target=work, name="logout", daemon=True).start()
-
-    def _finish_logout(self, message: str, ok: bool) -> bool:
-        self._logout_button.set_sensitive(True)
-        self._say(message, "ok" if ok else "error", persistent=not ok)
-        return False
 
     def _on_hotspot_selected(self, dropdown: Gtk.DropDown, _param) -> None:
         if self._hotspot_suppressed:

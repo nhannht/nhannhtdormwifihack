@@ -48,13 +48,11 @@ echo "  3. Press the login button in the window it opens, and wait for the page"
 echo "     to say you are connected."
 echo "  4. Come back here and press Control-C."
 echo
-echo "The recording stops itself after five minutes if you forget."
 
-# Bounded in time, so a forgotten terminal does not sit there filling the disk.
-timeout 300 tcpdump -i "$interface" -s 0 -w "$out" \
-    'tcp port 80 or tcp port 443 or udp port 53' || true
+# Run tcpdump as this process, not as a child of `timeout`: a wrapper swallows
+# Control-C, and a capture that cannot be stopped from the terminal is worse
+# than one that runs long. tcpdump handles the interrupt itself and exits
+# cleanly, which is also what closes the pcap properly.
+exec tcpdump -i "$interface" -s 0 -w "$out" \
+    'tcp port 80 or tcp port 443 or udp port 53'
 
-size=$(wc -c < "$out" 2>/dev/null || echo 0)
-echo
-echo "Saved $out ($size bytes)."
-echo "Read it back with:  sudo tcpdump -r $out -A 'tcp port 80' | less"
