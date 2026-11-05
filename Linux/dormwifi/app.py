@@ -79,6 +79,12 @@ _STATE_ICONS = {
 }
 
 
+#: What the picker says when the settings file names no hotspot. Without it the
+#: dialog silently preselected whichever saved network sorted first, which reads
+#: as "it is going to use that one" when it is going to use none.
+_NO_HOTSPOT = "— no hotspot chosen —"
+
+
 class DormWiFiWindow(Gtk.ApplicationWindow):
     """The one window: state at the top, actions in the middle, log at the bottom."""
 
@@ -330,7 +336,15 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
 
         self._configured_wifi = settings.wifi_name
         self._toggle_button.set_label("Pause auto-connect")
-        self._say("Watching. Signing in if the session has lapsed.", "info")
+        if settings.wifi_name:
+            self._say("Watching. Signing in if the session has lapsed.", "info")
+        else:
+            self._say(
+                "Watching, but no hotspot is chosen, so this machine will never be moved onto "
+                "one. Pick the dorm network in the list below.",
+                "error",
+                persistent=True,
+            )
         self._populate_hotspots(settings.wifi_name)
 
     def _stop_watcher(self, after: Callable[[], None] | None = None) -> None:
@@ -506,21 +520,27 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
 
     def _apply_hotspots(self, networks: list[str], current: str) -> bool:
         choices = list(networks)
-        if current and current not in choices:
+
+        if not current:
+            # Nothing is configured, and the list must say so. Preselecting a
+            # saved network here made "no hotspot chosen" look like "will use the
+            # first one", which is what it did instead: nothing.
+            selected = 0
+            choices.insert(0, _NO_HOTSPOT)
+        elif current not in choices:
             # The name in the settings file is the one that counts, so it has to
             # be visible even when the machine has not saved it. It drops off
             # when the hotspot is renamed, which is the very moment someone opens
             # this wondering why nothing is connecting.
             choices.insert(0, f"{current} (not saved)")
+            selected = 0
+        else:
+            selected = choices.index(current)
 
         self._hotspot_suppressed = True
-        self._hotspot_dropdown.set_model(Gtk.StringList.new(choices or ["No saved networks"]))
-        selected = 0
-        if current:
-            for index, name in enumerate(choices):
-                if name == current:
-                    selected = index
-                    break
+        self._hotspot_dropdown.set_model(
+            Gtk.StringList.new(choices or ["NetworkManager has no saved networks"])
+        )
         self._hotspot_dropdown.set_selected(selected)
         self._hotspot_suppressed = False
         return False
@@ -603,6 +623,14 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
         if selected is None:
             return
         name = selected.get_string()
+        if name == _NO_HOTSPOT:
+            self._say(
+                "No hotspot chosen yet, so nothing is being joined. Pick the dorm network "
+                "from this list.",
+                "error",
+                persistent=True,
+            )
+            return
         if name.endswith(" (not saved)"):
             self._say(
                 f"{name.removesuffix(' (not saved)')} is not saved by NetworkManager, so it "

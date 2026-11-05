@@ -233,6 +233,35 @@ class StatusBoardTests(unittest.TestCase):
         self.assertEqual(heard[-1].connection, "signedIn")
 
 
+class StartupAnnouncementTests(unittest.TestCase):
+    def test_an_unset_hotspot_is_named_as_the_reason_nothing_is_joined(self):
+        # An empty wifi_name makes the join step a no-op, and the loop then says
+        # "probably not on the configured network" forever, which reads like a
+        # network fault. This line has to say which setting is missing.
+        from dormwifi.activity_log import ActivityLog
+        from dormwifi.session_scheduler import SessionScheduler
+        from dormwifi.settings import Settings
+
+        log = ActivityLog()
+        SessionScheduler(Settings(), log)._announce_hotspot()
+
+        messages = [entry.message for entry in log.all]
+        self.assertEqual(len(messages), 1)
+        self.assertIn("No hotspot is set", messages[0])
+        self.assertIn("wifi_name", messages[0])
+        self.assertIn("config set wifi_name", messages[0])
+
+    def test_a_configured_hotspot_is_named(self):
+        from dormwifi.activity_log import ActivityLog
+        from dormwifi.session_scheduler import SessionScheduler
+        from dormwifi.settings import Settings
+
+        log = ActivityLog()
+        SessionScheduler(Settings(wifi_name="INET - Free WiFi"), log)._announce_hotspot()
+
+        self.assertEqual(log.all[0].message, "Watching for INET - Free WiFi.")
+
+
 class StatusFileTests(unittest.TestCase):
     def test_a_status_survives_a_round_trip_through_a_file(self):
         from dormwifi.status_board import StatusFile, WatcherStatus

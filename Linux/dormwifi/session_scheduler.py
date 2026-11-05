@@ -128,6 +128,7 @@ class SessionScheduler:
             "and will not renew one early, so expect a gap of a few seconds once per session."
         )
 
+        self._announce_hotspot()
         self._announce_safety_net()
         self._report(STARTING)
 
@@ -228,6 +229,24 @@ class SessionScheduler:
         self.log.info("Stopped watching.")
 
     # MARK: - The safety net
+
+    def _announce_hotspot(self) -> None:
+        """Say at startup which network this is watching for, or that none is set.
+
+        An empty `wifi_name` is the default, and it makes the join step a no-op:
+        three unanswered checks in a row then log "probably not on the configured
+        network" forever, which sounds like a network fault and is really a
+        missing setting.
+        """
+        if self.settings.wifi_name:
+            self.log.info(f"Watching for {self.settings.wifi_name}.")
+            return
+
+        self.log.warning(
+            "No hotspot is set (wifi_name is empty), so this will never join a network: it "
+            "will only sign in when this machine is already on the hotspot. Set it with "
+            "'dormwifi config set wifi_name \"<name>\"', or pick one in the window."
+        )
 
     def _announce_safety_net(self) -> None:
         """Say at startup whether there is a floor under this or not."""
@@ -371,6 +390,8 @@ class SessionScheduler:
         active = self.settings.resolving_gateway()
         if not active.gateway_ip:
             return ("unreachable", "this machine has no network at all")
+
+        self._status.router_ip = active.gateway_ip
 
         answer = session_probe.status(active.gateway_ip, PortalClient())
         if answer.kind == "active":

@@ -145,6 +145,15 @@ class WindowTests(unittest.TestCase):
         self.assertIn("the router said no", text)
         self.assertIn("lines this run", self.window._count_label.get_text())
 
+    def test_an_unset_hotspot_is_shown_as_unset_not_as_the_first_saved_network(self):
+        # Preselecting a saved network made "no hotspot chosen" look like "will
+        # use this one", and then nothing was ever joined.
+        self.window._apply_hotspots(["Dorm One", "Dorm Two"], "")
+
+        model = self.window._hotspot_dropdown.get_model()
+        self.assertEqual(model.get_string(0), "— no hotspot chosen —")
+        self.assertEqual(self.window._hotspot_dropdown.get_selected(), 0)
+
     def test_the_hotspot_list_shows_a_network_networkmanager_does_not_know(self):
         # The name in the settings file is the one that counts, so it has to stay
         # visible even when it is not in the saved list. It drops off the list
@@ -197,6 +206,17 @@ class WindowTests(unittest.TestCase):
         finally:
             observer.shutdown()
             holder.release()
+
+    def test_choosing_the_placeholder_explains_itself_and_writes_nothing(self):
+        from dormwifi.settings import Settings
+
+        self.window._hotspot_suppressed = False
+        self.window._hotspot_dropdown.set_model(Gtk.StringList.new(["— no hotspot chosen —"]))
+
+        self.window._on_hotspot_selected(self.window._hotspot_dropdown, None)
+
+        self.assertIn("No hotspot chosen yet", self.window._message.get_text())
+        self.assertEqual(Settings.load(self.settings_path).wifi_name, "Dorm WiFi")
 
     def test_choosing_another_network_is_written_to_the_settings_file(self):
         from dormwifi.settings import Settings
