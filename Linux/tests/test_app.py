@@ -24,7 +24,7 @@ try:
     import gi
 
     gi.require_version("Gtk", "4.0")
-    from gi.repository import Gtk
+    from gi.repository import Gio, Gtk
 
     HAVE_GTK = True
 except (ImportError, ValueError):  # pragma: no cover - depends on the machine
@@ -44,8 +44,13 @@ def shared_application():
     if _APPLICATION is None:
         from dormwifi.app import DormWiFiApplication
 
-        _APPLICATION = DormWiFiApplication(None)
-        _APPLICATION.register(None)
+        # NON_UNIQUE, because the application id is taken whenever the real
+        # window is open. `register` then fails, and building an
+        # ApplicationWindow for an application that did not register segfaults
+        # inside GTK rather than raising anything Python can catch.
+        _APPLICATION = DormWiFiApplication(None, flags=Gio.ApplicationFlags.NON_UNIQUE)
+        if not _APPLICATION.register(None):
+            raise unittest.SkipTest("could not register a GTK application on this session")
     return _APPLICATION
 
 

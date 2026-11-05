@@ -721,8 +721,8 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
 
 
 class DormWiFiApplication(Gtk.Application):
-    def __init__(self, settings_path: Path | None) -> None:
-        super().__init__(application_id=APPLICATION_ID, flags=0)
+    def __init__(self, settings_path: Path | None, flags: int = 0) -> None:
+        super().__init__(application_id=APPLICATION_ID, flags=flags)
         self._settings_path = settings_path
         self._window: DormWiFiWindow | None = None
 
