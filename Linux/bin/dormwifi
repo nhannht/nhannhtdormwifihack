@@ -1,0 +1,14 @@
+#!/bin/sh
+# Runs dormwifi from the checkout it lives in, without installing anything.
+#
+# The package is next to this script, so it is put on the path and started with
+# the system interpreter, which is the one that has PyGObject from apt.
+set -eu
+
+here=$(cd -- "$(dirname -- "$0")" && pwd)
+root=$(dirname -- "$here")
+
+PYTHONPATH="$root${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH
+
+exec python3 -m dormwifi "$@"

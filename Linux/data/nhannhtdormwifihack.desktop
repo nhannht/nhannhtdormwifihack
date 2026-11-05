@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Dorm WiFi
+Comment=Sign in to the dorm WiFi and keep the session alive
+Exec=dormwifi gui
+Icon=network-wireless
+Terminal=false
+Categories=Network;
+Keywords=wifi;captive;portal;hotspot;
+StartupNotify=true

@@ -73,6 +73,18 @@ swift test               # 92 tests
 Needs macOS 14 or newer. The only outside dependency is Apple's
 `swift-argument-parser`.
 
+## Linux
+
+There is a Linux port in [`Linux/`](Linux/README.md): the same engine in Python,
+with a GTK 4 window where the menu bar icon was. Rejoining networks goes through
+NetworkManager (`nmcli`), and it starts at login as a systemd user unit rather
+than a launchd agent.
+
+```bash
+sudo apt install python3-gi gir1.2-gtk-4.0
+cd Linux && ./bin/dormwifi gui
+```
+
 ## The menu bar app
 
 A small icon sits in the menu bar. Click it and you get:
