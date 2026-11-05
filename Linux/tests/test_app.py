@@ -223,6 +223,58 @@ class WindowTests(unittest.TestCase):
         self.assertIn("No hotspot chosen yet", self.window._message.get_text())
         self.assertEqual(Settings.load(self.settings_path).wifi_name, "Dorm WiFi")
 
+    def test_closing_the_window_hides_it_while_an_icon_exists(self):
+        # The normal shape of a background app: the icon is the way back, so the
+        # watcher keeps running. Saying nothing at all would read as a crash.
+        class FakeTray:
+            def update(self, *args, **kwargs):
+                pass
+
+            def stop(self):
+                pass
+
+        self.window._tray = FakeTray()
+        quit_called = []
+        self.window._quit = lambda: quit_called.append(True)
+        told = []
+        self.window._notify_hidden = lambda: told.append(True)
+
+        keep_open = self.window._on_close()
+
+        self.assertTrue(keep_open, "the window should not close")
+        self.assertFalse(self.window.get_visible())
+        self.assertEqual(quit_called, [])
+        self.assertEqual(told, [True], "the user was left with no word about where it went")
+
+    def test_closing_without_an_icon_quits(self):
+        # No icon means no way back, so a hidden watcher would be unreachable.
+        self.window._tray = None
+        quit_called = []
+        self.window._quit = lambda: quit_called.append(True)
+
+        keep_open = self.window._on_close()
+
+        self.assertFalse(keep_open)
+        self.assertEqual(quit_called, [True])
+
+    def test_pausing_from_the_tray_presses_the_same_button(self):
+        class FakeScheduler:
+            def stop(self):
+                pass
+
+        calls = []
+        self.window._stop_watcher = lambda *a, **k: calls.append("stop")
+        self.window._scheduler = FakeScheduler()  # pretend a watcher is running
+
+        self.window._toggle_watcher()
+
+        self.assertEqual(calls, ["stop"])
+
+    def test_the_tray_cannot_pause_a_watcher_that_is_not_ours(self):
+        self.window._observing = True
+        self.window._toggle_watcher()
+        self.assertIn("cannot pause it", self.window._message.get_text())
+
     def test_choosing_another_network_is_written_to_the_settings_file(self):
         from dormwifi.settings import Settings
 

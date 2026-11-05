@@ -55,12 +55,26 @@ anyone watching. That is the same limit the macOS build has with
 `networksetup`: join the hotspot and the fallback network by hand once, with
 "Automatically connect" ticked, and they can be rejoined from then on.
 
-**There is no menu bar icon, and that is not an oversight.** GTK 4 removed
-`Gtk.StatusIcon`, and a status-notifier icon needs libayatana-appindicator, which
-is a GTK 3 library and cannot live in a GTK 4 process. So the window is the UI:
-it is a normal window in the dock, and the same information the macOS menu shows
-is laid out flat. Closing it stops the watcher, which frees the lock for the
-command line.
+**The icon in the top bar is real, and not drawn by GTK.** GTK 4 removed
+`Gtk.StatusIcon`, and libayatana-appindicator — what most tray libraries use on
+Linux — is a GTK 3 library, which a GTK 4 process cannot load. Neither is the
+obstacle it looks like: a tray icon is a D-Bus conversation. This exports
+`org.kde.StatusNotifierItem` and a `com.canonical.dbusmenu` menu, and whichever
+shell runs `org.kde.StatusNotifierWatcher` draws them — GNOME with the
+AppIndicator extension, KDE, Xfce, Cinnamon, Budgie. That is what
+libayatana-appindicator does internally.
+
+The shape of the icon says what the colour says, so it still means something in
+a monochrome or recoloured panel: a filled circle signed in, a ring while it is
+working, a triangle when the router is not there, a rounded pair of dots on the
+safety-net network, two bars when paused. Hovering shows the headline and the
+countdown; the menu has the same rows the macOS menu has, plus a live countdown
+in its first line.
+
+Closing the window hides it and leaves the watcher running, with a notification
+to say so; **Quit is in the icon's menu**. On a desktop with no tray host the
+window is the whole UI, and closing it quits, because otherwise there would be no
+way back to it.
 
 ## The window
 
@@ -148,7 +162,7 @@ directory:
 cd Linux && python3 -m unittest discover -s tests -t .
 ```
 
-114 tests, no network and no hotspot needed: the CHAP hashing against the same
+171 tests, no network and no hotspot needed: the CHAP hashing against the same
 golden value the Swift tests use, the HTML field scraper, the status page reader,
 the order the login steps go out in against a scripted router, the settings file
 round trip, the log, the run lock, the route arithmetic, and the window's wiring.

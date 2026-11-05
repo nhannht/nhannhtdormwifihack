@@ -46,6 +46,7 @@ from .status_board import (  # noqa: E402
     StatusFile,
     WatcherStatus,
 )
+from .tray import TrayIcon  # noqa: E402
 from .wifi import saved_networks  # noqa: E402
 
 APPLICATION_ID = "vn.io.nhannht.dormwifihack"
@@ -110,10 +111,15 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
         self._status = WatcherStatus()
         self._log_offset = 0
         self._configured_wifi = ""
+        self._tray: TrayIcon | None = None
+        self._told_about_hiding = False
         self._build()
 
         self._unsubscribe_log = self._log.subscribe(self._on_log_entry)
         self._unsubscribe_board = self._board.subscribe(self._on_status)
+
+        if autostart:
+            self._start_tray()
 
         self._load_history()
         self._configured_wifi = self._settings_wifi_name()
@@ -123,6 +129,7 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
         else:
             # Built for a test, or opened to look at: no lock, no watcher.
             self._populate_hotspots(self._settings_wifi_name())
+        self.connect("close-request", self._on_close)
         GLib.timeout_add(1000, self._tick)
 
     # MARK: - Construction
@@ -283,6 +290,40 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
             tag = self._log_buffer.create_tag(level)
             self._tags[level] = tag
 
+    # MARK: - The tray icon
+
+    def _start_tray(self) -> None:
+        """Ask the desktop for an icon, and carry on without one if it says no."""
+        tray = TrayIcon(
+            title="Dorm WiFi",
+            on_activate=self._show_window,
+            on_secondary_activate=self._toggle_watcher,
+            on_toggle=self._toggle_watcher,
+            on_sign_in=self._sign_in_now,
+            on_quit=self._quit,
+        )
+        if tray.start():
+            self._tray = tray
+            self._update_tray()
+        else:
+            self._log.info(
+                "No tray icon: this session has no StatusNotifierWatcher. The window is the "
+                "only way to see or change the watcher."
+            )
+
+    def _update_tray(self) -> None:
+        if self._tray is None:
+            return
+        self._tray.update(
+            self._status,
+            running=self._scheduler is not None,
+            controlled=not self._observing,
+        )
+
+    def _show_window(self) -> None:
+        self.set_visible(True)
+        self.present()
+
     def _settings_wifi_name(self) -> str:
         try:
             return Settings.load(self._settings_path).wifi_name
@@ -424,6 +465,8 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
         self._router_value.set_text(status.router_ip or "—")
         self._internet_value.set_text("up" if status.has_internet else "down")
 
+        self._update_tray()
+
         if not self._observing:
             if status.connection == STOPPING:
                 self._toggle_button.set_label("Stopping…")
@@ -435,9 +478,15 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
         return False
 
     def _tick(self) -> bool:
-        """Redraw the headline each second so the countdown moves as you read it."""
+        """Redraw the headline each second so the countdown moves as you read it.
+
+        The tray label comes from the same deadline, so it moves with it. Asking
+        to update every second costs nothing: the tray only talks to the desktop
+        when the words actually changed.
+        """
         if not self._observing:
             self._headline.set_text(self._status.headline)
+        self._update_tray()
         return True
 
     def _load_observer_status(self) -> None:
@@ -548,12 +597,28 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
     # MARK: - Actions
 
     def _on_toggle_watcher(self, _button: Gtk.Button) -> None:
+        self._toggle_watcher()
+
+    def _toggle_watcher(self) -> None:
+        """Pause or start, from the button or from the tray icon."""
+        if self._observing:
+            self._say(
+                "Another watcher is running, so this window cannot pause it.",
+                "error",
+                persistent=True,
+            )
+            return
         if self._scheduler is None:
             self._start_watcher()
         else:
             self._stop_watcher()
 
     def _on_sign_in_now(self, _button: Gtk.Button) -> None:
+        self._sign_in_now()
+
+    def _sign_in_now(self) -> None:
+        if self._observing:
+            return
         try:
             settings = Settings.load(self._settings_path).resolving_gateway_waiting_up_to(10)
         except (OSError, ValueError) as error:
@@ -703,9 +768,50 @@ class DormWiFiWindow(Gtk.ApplicationWindow):
             return
         self._safety_value.set_text(settings.fallback_wifi_name or "off")
 
+    # MARK: - Closing
+
+    def _on_close(self, *_args) -> bool:
+        """Hide rather than quit, when there is an icon to get back to.
+
+        With a tray icon this is the normal shape of a background app: closing
+        the window leaves the watcher running and the icon is the way back. The
+        notification exists because a window that disappears with no word reads
+        as a crash, and because someone who wanted to quit needs to know where
+        Quit went.
+
+        Without an icon there would be no way back at all, so closing quits.
+        """
+        if self._tray is None:
+            self._quit()
+            return False
+
+        self.set_visible(False)
+        if not self._told_about_hiding:
+            self._told_about_hiding = True
+            self._notify_hidden()
+        return True
+
+    def _notify_hidden(self) -> None:
+        application = self.get_application()
+        if application is None:
+            return
+        notification = Gio.Notification.new("Dorm WiFi is still watching")
+        network = self._configured_wifi or "the hotspot"
+        notification.set_body(
+            f"Keeping {network} signed in. The icon in the top bar pauses it or quits."
+        )
+        try:
+            application.send_notification("still-watching", notification)
+        except GLib.Error:
+            pass
+
+
     # MARK: - Shutdown
 
     def shutdown(self) -> None:
+        if self._tray is not None:
+            self._tray.stop()
+            self._tray = None
         try:
             self._unsubscribe_board()
             self._unsubscribe_log()
@@ -739,20 +845,12 @@ class DormWiFiApplication(Gtk.Application):
     def do_activate(self) -> None:
         if self._window is None:
             self._window = DormWiFiWindow(self, self._settings_path)
-            self._window.connect("close-request", self._on_close)
         self._window.present()
 
     def do_shutdown(self) -> None:
         if self._window is not None:
             self._window.shutdown()
         Gtk.Application.do_shutdown(self)
-
-    def _on_close(self, *_args) -> bool:
-        # Closing the window stops the watcher: the user asked for it, and
-        # leaving a hidden process holding the singleton lock would make the next
-        # `dormwifi run` fail for no visible reason.
-        self.quit()
-        return False
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="dormwifi gui", description="The Dorm WiFi window.")
