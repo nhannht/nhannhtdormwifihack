@@ -31,9 +31,19 @@ To put it on your `PATH`:
 ln -s "$PWD/bin/dormwifi" ~/.local/bin/dormwifi
 ```
 
-For the window in the application menu, copy `data/nhannhtdormwifihack.desktop`
-to `~/.local/share/applications/` and make sure `dormwifi` is on the `PATH` that
-desktop files see.
+For a launcher in the application grid, with the icon and a `dormwifi` command
+on the `PATH`:
+
+```bash
+./tools/install-launcher.sh              # application grid
+./tools/install-launcher.sh --desktop    # ... and a shortcut on the Desktop
+./tools/install-launcher.sh --uninstall  # take all of it back out
+```
+
+No root, nothing outside your home directory, safe to run twice. It writes an
+entry whose `Exec` is the absolute path of this checkout, so **moving the
+checkout means running it again**. After that, Super and "Dorm WiFi" opens the
+window, and the same entry sits on the Desktop if you asked for one.
 
 ## What it does on Linux
 

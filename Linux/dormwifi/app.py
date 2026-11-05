@@ -850,9 +850,16 @@ class DormWiFiApplication(Gtk.Application):
             )
 
     def do_activate(self) -> None:
+        """Open the window, or bring back the one that is hidden.
+
+        Launching the app a second time from the grid does not start a second
+        process: it activates this one, and the window may be hidden because it
+        was closed earlier. `present()` alone does not make a hidden Gtk.Window
+        visible, so the launcher would appear to do nothing at all.
+        """
         if self._window is None:
             self._window = DormWiFiWindow(self, self._settings_path)
-        self._window.present()
+        self._window._show_window()
 
     def do_shutdown(self) -> None:
         if self._window is not None:
@@ -860,6 +867,14 @@ class DormWiFiApplication(Gtk.Application):
         Gtk.Application.do_shutdown(self)
 
 def main(argv: list[str] | None = None) -> int:
+    # Run from `python3 -m dormwifi`, the program name is `__main__.py`, and GTK
+    # puts that in WM_CLASS. The dock then treats the window as an unnamed
+    # application and shows it beside the launcher instead of under it, and the
+    # launcher's StartupWMClass matches nothing. Named here, before the
+    # application exists, so everything downstream agrees.
+    GLib.set_prgname("dormwifi")
+    GLib.set_application_name("Dorm WiFi")
+
     parser = argparse.ArgumentParser(prog="dormwifi gui", description="The Dorm WiFi window.")
     parser.add_argument("--settings", "-s", metavar="PATH", help="Path to the settings file.")
     options, remaining = parser.parse_known_args(argv)

@@ -3,9 +3,23 @@
 #
 # The package is next to this script, so it is put on the path and started with
 # the system interpreter, which is the one that has PyGObject from apt.
+#
+# The script follows symlinks before working out where it lives, because
+# ~/.local/bin/dormwifi is a link here: resolving `dirname $0` without that gives
+# ~/.local, whose PYTHONPATH has no dormwifi module in it, and the launcher then
+# fails with "No module named dormwifi" while the checkout is perfectly fine.
 set -eu
 
-here=$(cd -- "$(dirname -- "$0")" && pwd)
+self=$0
+while [ -L "$self" ]; do
+    target=$(readlink -- "$self")
+    case $target in
+        /*) self=$target ;;
+        *) self=$(dirname -- "$self")/$target ;;
+    esac
+done
+
+here=$(cd -- "$(dirname -- "$self")" && pwd)
 root=$(dirname -- "$here")
 
 PYTHONPATH="$root${PYTHONPATH:+:$PYTHONPATH}"

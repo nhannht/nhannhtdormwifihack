@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The launcher and application icon: a wifi fan on the dark ground the tray
+     icon uses, with the same green that means "signed in" there. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="28" ry="28" fill="#16202b"/>
+  <g fill="none" stroke="#2ec27e" stroke-width="8" stroke-linecap="round">
+    <path d="M 38.5 76.5 A 36 36 0 0 1 89.5 76.5"/>
+    <path d="M 48.4 86.4 A 22 22 0 0 1 79.6 86.4"/>
+  </g>
+  <circle cx="64" cy="102" r="8" fill="#2ec27e"/>
+</svg>
