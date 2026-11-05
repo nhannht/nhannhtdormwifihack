@@ -54,6 +54,14 @@ trusting any of it; the portal is a third party's.
   it. List with `pgrep -f "[t]ext"` and kill those PIDs.
 - **Bounding an interactive capture with `timeout`** — it swallows ^C, so the
   person recording cannot stop it. `exec` the capture tool instead.
+- **Wiring an installed command** — test it through the installed symlink, not
+  through the checkout path. `~/.local/bin/<name>` makes `dirname $0` resolve to
+  `~/.local`, so a script that derives its package directory from `$0` fails with
+  "No module named …" while the checkout is fine; follow the link first.
+- **Desktop entries** — run `desktop-file-validate` (an unregistered category
+  hides the entry), and make `StartupWMClass` match the window's real WM_CLASS
+  from `xprop`: for `python3 -m package` that is `__main__.py` until
+  `GLib.set_prgname` is called, and a mismatch puts two icons in the dock.
 - **Calling a sign-in fixed** — the evidence is `Logged in.` in the log *and* a
   204 from the connectivity check, in the same run. A session someone else opened
   proves nothing.
