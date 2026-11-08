@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">@color/accent</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:statusBarColor">@color/background</item>
+        <item name="android:navigationBarColor">@color/background</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorSecondary">@color/text_dim</item>
+    </style>
+
+    <style name="Headline">
+        <item name="android:textSize">22sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text</item>
+    </style>
+
+    <style name="Detail">
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/text_dim</item>
+    </style>
+
+    <!-- A style may carry layout params, but the inflater still needs a height
+         from somewhere, so each of these says both. -->
+    <style name="RowLabel">
+        <item name="android:layout_width">96dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/text_dim</item>
+    </style>
+
+    <style name="RowValue">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/text</item>
+    </style>
+
+    <style name="FieldLabel">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">12dp</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/text_dim</item>
+    </style>
+
+    <style name="Field">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textColorHint">@color/text_dim</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:paddingTop">6dp</item>
+        <item name="android:paddingBottom">6dp</item>
+    </style>
+</resources>
