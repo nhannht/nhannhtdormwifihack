@@ -85,6 +85,21 @@ sudo apt install python3-gi gir1.2-gtk-4.0
 cd Linux && ./bin/dormwifi gui
 ```
 
+## Android
+
+There is an Android port in [`Android/`](Android/README.md): the same engine in
+Java, a foreground service where the systemd user unit was, and one screen where
+the GTK window was. It signs in to the same hotspot and renews the same way, and
+it cannot rejoin a network, because no Android app may.
+
+```bash
+cd Android && ./build.sh && ./install.sh
+```
+
+That needs an Android SDK with build-tools 35 or newer, a JDK, and `adb`. No
+Gradle, and no third-party dependency: the same engine in Java, checked by 105
+pure-JVM tests.
+
 ## The menu bar app
 
 A small icon sits in the menu bar. Click it and you get:

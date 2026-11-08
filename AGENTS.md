@@ -11,11 +11,14 @@ Sources/nhannhtdormwifihackMenuBar/ the macOS menu bar app
 iOS/                               the phone app and its tunnel
 Tests/                             the Swift tests
 Linux/                             the Linux port: Python, GTK 4 window, tray icon
+Android/                           the Android port: Java, foreground service, one screen
 ```
 
-`Linux/` has its own `README.md` and its own settings file
-(`~/.config/nhannhtdormwifihack/settings.json`). Checks: `swift test` for the
-Swift side, `cd Linux && python3 -m unittest discover -s tests -t .` for the port.
+`Linux/` and `Android/` each have their own `README.md`, and both read the same
+settings keys — `~/.config/nhannhtdormwifihack/settings.json` for the first, the
+app's preferences for the second. Checks: `swift test` for the Swift side,
+`cd Linux && python3 -m unittest discover -s tests -t .` for the Python port,
+`cd Android && ./check.sh` for the Java one.
 
 ## The hotspots this exists for
 
