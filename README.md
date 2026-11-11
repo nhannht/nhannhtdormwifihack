@@ -100,6 +100,26 @@ That needs an Android SDK with build-tools 35 or newer, a JDK, and `adb`. No
 Gradle, and no third-party dependency: the same engine in Java, checked by 105
 pure-JVM tests.
 
+## Windows
+
+There is a Windows port in [`Windows/`](Windows/README.md): the same engine in
+Python, with a Tkinter window and a notification-area icon where the GTK window
+was. Rejoining networks goes through `netsh wlan`, and it starts at login through
+a hidden VBScript — Task Scheduler when elevated, otherwise the Startup folder —
+rather than a launchd agent or a systemd unit.
+
+```powershell
+cd Windows
+.\bin\dormwifi.cmd shortcut   # then double-click Dorm WiFi on the Desktop
+```
+
+That needs Python 3.10 or newer and nothing else: Tkinter ships with Python, and
+there is no compiler, no virtualenv and no `pip install`. Closing the window
+hides it to the notification area and keeps the watcher running; the tray menu
+restores it or quits. `dormwifi.cmd install` is how a watcher starts at login.
+The port is checked by 181 tests that need neither a network nor a hotspot, and
+it has signed in to the real `INET - Free WiFi` Awing Connect portal end to end.
+
 ## The menu bar app
 
 A small icon sits in the menu bar. Click it and you get:
@@ -195,6 +215,9 @@ Sources/nhannhtdormwifihackKit/      the engine
 
 Sources/nhannhtdormwifihackCLI/      the commands
 Sources/nhannhtdormwifihackMenuBar/  the menu bar app
+Linux/                               the Linux port
+Android/                             the Android port
+Windows/                             the Windows port
 ```
 
 ## What changed from the Windows version this replaces

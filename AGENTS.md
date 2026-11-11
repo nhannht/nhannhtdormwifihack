@@ -12,13 +12,16 @@ iOS/                               the phone app and its tunnel
 Tests/                             the Swift tests
 Linux/                             the Linux port: Python, GTK 4 window, tray icon
 Android/                           the Android port: Java, foreground service, one screen
+Windows/                           the Windows port: Python, Tkinter window and tray
 ```
 
-`Linux/` and `Android/` each have their own `README.md`, and both read the same
-settings keys — `~/.config/nhannhtdormwifihack/settings.json` for the first, the
-app's preferences for the second. Checks: `swift test` for the Swift side,
-`cd Linux && python3 -m unittest discover -s tests -t .` for the Python port,
-`cd Android && ./check.sh` for the Java one.
+`Linux/`, `Android/` and `Windows/` each have their own `README.md`, and all read
+the same settings keys — `~/.config/nhannhtdormwifihack/settings.json` for the
+first, the app's preferences for the second, `%APPDATA%\nhannhtdormwifihack\`
+for the third. Checks: `swift test` for the Swift side,
+`cd Linux && python3 -m unittest discover -s tests -t .` for the Linux port,
+`cd Android && ./check.sh` for the Java one,
+`cd Windows && python -m unittest discover -s tests -t .` for the Windows one.
 
 ## The hotspots this exists for
 
@@ -68,3 +71,12 @@ trusting any of it; the portal is a third party's.
 - **Calling a sign-in fixed** — the evidence is `Logged in.` in the log *and* a
   204 from the connectivity check, in the same run. A session someone else opened
   proves nothing.
+- **Reading the Windows routing table** — `GetAdaptersAddresses` reports
+  `OperStatus` as `IfOperStatusUp` (1). The similarly named
+  `IF_OPER_STATUS_OPERATIONAL` (5) is an NDIS internal value: comparing against it
+  makes every adapter look down and the app reports "no network" on a machine
+  that is online.
+- **Quoting a `netsh wlan connect` argument** — pass `name=INET - Free WiFi` as
+  one argv element and let `subprocess` quote it. Embedding the quotes
+  (`name="INET - Free WiFi"`) makes netsh take them literally and print its usage
+  text instead of joining, which reads like a syntax error in the app.
