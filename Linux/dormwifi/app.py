@@ -25,7 +25,9 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 
-from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402  - after require_version
+# PyGObject fills gi.repository in at run time, so no static checker can see these
+# four names. The import is correct, and the window tests build the real window.
+from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402  # pyright: ignore[reportAttributeAccessIssue]
 
 from . import error_text  # noqa: E402
 from .activity_log import ActivityLog, LogEntry, entries_in_file  # noqa: E402
