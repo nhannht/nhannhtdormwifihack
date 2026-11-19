@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 
 from dormwifi.activity_log import ActivityLog
 from dormwifi.login_engine import LoginEngine
-from dormwifi.portal_client import PortalResponse
+from dormwifi.portal_client import PortalClient, PortalResponse
 from dormwifi.settings import Settings
 
 STATUS_PAGE = """
@@ -27,10 +27,17 @@ STATUS_PAGE = """
 """
 
 
-class ScriptedRouter:
-    """Answers from a script, and records the order the paths arrived in."""
+class ScriptedRouter(PortalClient):
+    """Answers from a script, and records the order the paths arrived in.
+
+    A ``PortalClient`` by type, so it can stand where the engine expects one; the
+    subclassing is only about accepting the type, since every request method here
+    is replaced by the script. The opener the base class builds is never used and
+    opens nothing.
+    """
 
     def __init__(self, replies: dict[str, str]) -> None:
+        super().__init__()
         self.replies = replies
         self.asked: list[str] = []
 
@@ -44,6 +51,9 @@ class ScriptedRouter:
 
     def get(self, url, headers=None, timeout=None):  # noqa: ARG002 - interface match
         return self._answer(url)
+
+    def prefer_gateway_dns(self, server_ip, on_answer=None):  # noqa: ARG002 - interface match
+        """There is no resolver here: the script decides every address already."""
 
     def post_json(self, url, body, referer, origin, headers=None, timeout=None):  # noqa: ARG002
         return self._answer(url)

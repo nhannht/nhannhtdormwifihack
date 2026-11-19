@@ -223,6 +223,23 @@ dormwifi config set password "your password"     # not echoed
 **Do not set `gateway_ip`.** Leaving it empty means "ask this machine which
 router it is using right now", and that is almost always what you want.
 
+### When this machine enforces its own DNS
+
+A VPN can put every lookup through a resolver it reaches — Tailscale with the
+DNS feature on does exactly that — and the machine then stops asking the router
+anything. That is invisible until the session lapses: the VPN's path is outside
+the walled garden, so lookups stall, and the one lookup the sign-in cannot skip
+is the portal's name. The sign-in therefore asks the router's DNS first for that
+host and connects to whatever address it gives, keeping the name in the request.
+Nothing has to be turned off, and on a healthy link the router just forwards and
+the answer is the same one the system would have given.
+
+The browser popup is a separate matter and not something this can fix:
+NetworkManager resolves its own connectivity check, so with the VPN's resolver
+unreachable it reports "no internet" instead of "captive portal". The watcher
+renews the session anyway; to reach the portal in a browser, open the router by
+address — `http://192.168.200.1/login` — which needs no DNS at all.
+
 The log, the status file the window reads and the run lock live in the same
 directory:
 
@@ -241,12 +258,13 @@ directory:
 cd Linux && python3 -m unittest discover -s tests -t .
 ```
 
-186 tests, no network and no hotspot needed: the CHAP hashing against the same
+210 tests, no network and no hotspot needed: the CHAP hashing against the same
 golden value the Swift tests use, the HTML field scraper, the status page reader,
-the order the login steps go out in against a scripted router, the settings file
-round trip, the log, the run lock, the route arithmetic, and the window's wiring.
-The window tests build the real window unmapped and read the labels back, and
-they skip themselves when there is no display.
+the order the login steps go out in against a scripted router, the DNS reply
+reader and the resolver that asks the router first, the settings file round trip,
+the log, the run lock, the route arithmetic, and the window's wiring. The window
+tests build the real window unmapped and read the labels back, and they skip
+themselves when there is no display.
 
 ## Licence
 

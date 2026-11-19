@@ -129,6 +129,14 @@ class LoginEngine:
         command for when the user actually wants to leave.
         """
         client = client or PortalClient()
+        # One name is involved in the whole sign-in: the portal's, in step 2. Step
+        # 2 also runs at the one moment this machine may have no working
+        # resolver at all — the second the session lapses and everything outside
+        # the walled garden, including a DNS server reached through a VPN, stops
+        # answering. The router is inside that garden, so let it answer for names
+        # first. Attached here rather than at each call site so the watcher, the
+        # CLI and the window all get it.
+        client.prefer_gateway_dns(self.settings.gateway_ip, on_answer=self._note_resolved)
 
         answer = session_probe.status(self.settings.gateway_ip, client)
         if answer.kind == "active":
@@ -189,9 +197,19 @@ class LoginEngine:
             self.log.failure(reason)
             return LoginResult("failed", reason)
 
+    def _note_resolved(self, name: str, address: str) -> None:
+        """Say which resolver answered, because that is the line that explains step 2.
+
+        Nothing else in the log separates "the portal is down" from "this machine
+        asked a resolver outside the walled garden and got an address the garden
+        does not answer for".
+        """
+        self.log.info(f"The router's DNS answered {name} with {address}")
+
     def sign_out(self, client: PortalClient | None = None) -> None:
         """End the current session, so a fresh one can be started."""
         client = client or PortalClient()
+        client.prefer_gateway_dns(self.settings.gateway_ip)
         target = (
             self.settings.logout_url
             if self.settings.logout_url

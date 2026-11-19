@@ -11,14 +11,19 @@ which comes from apt.
 
 from __future__ import annotations
 
+import errno
 import http.client
 import json
+import socket
 import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from http.cookiejar import CookieJar
+from typing import Callable, cast
+
+from .portal_dns import GatewayResolver
 
 # Sent on every request. The portal serves different content to clients it does
 # not recognise as a desktop browser.
@@ -69,8 +74,11 @@ class _AcceptEveryStatus(urllib.request.HTTPDefaultErrorHandler):
     did not answer" forever. That is exactly what this hotspot does.
     """
 
-    def http_error_default(self, request, response, code, msg, headers):
-        return response
+    def http_error_default(self, req, fp, code, msg, hdrs):
+        # Typeshed says this returns an `HTTPError`; the caller (urllib) uses the
+        # return value as the response, which is the whole point of overriding
+        # it. The cast states the intent rather than papering over the override.
+        return cast(urllib.error.HTTPError, fp)
 
 
 class _GatewayTrust(urllib.request.HTTPSHandler):
@@ -82,8 +90,9 @@ class _GatewayTrust(urllib.request.HTTPSHandler):
     so a certificate problem out on the internet still fails the way it should.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, resolver: GatewayResolver | None = None) -> None:
         super().__init__()
+        self._resolver = resolver
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
@@ -92,25 +101,140 @@ class _GatewayTrust(urllib.request.HTTPSHandler):
     def https_open(self, req):
         host = urllib.parse.urlsplit(req.full_url).hostname or ""
         if is_private_host(host):
-            return self.do_open(http.client.HTTPSConnection, req, context=self._insecure)
-        return self.do_open(http.client.HTTPSConnection, req)
+            return self.do_open(
+                _PinnedHTTPSConnection, req, context=self._insecure, resolver=self._resolver
+            )
+        return self.do_open(_PinnedHTTPSConnection, req, resolver=self._resolver)
+
+
+class _PortalHTTPHandler(urllib.request.HTTPHandler):
+    """Plain HTTP, through the connection class that honours the resolver."""
+
+    def __init__(self, resolver: GatewayResolver | None = None) -> None:
+        super().__init__()
+        self._resolver = resolver
+
+    def http_open(self, req):
+        return self.do_open(_PinnedHTTPConnection, req, resolver=self._resolver)
+
+
+class _PinnedHTTPConnection(http.client.HTTPConnection):
+    """An HTTP connection opened to the address a resolver chose.
+
+    ``self.host`` keeps the name the request was made for. Only the address the
+    socket opens to changes, which is why the ``Host`` header still carries the
+    name: nothing above the socket can tell that a resolver was involved.
+    """
+
+    def __init__(self, *args, resolver: GatewayResolver | None = None, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._resolver = resolver
+
+    def connect(self):
+        address = _pinned_address(self._resolver, self.host)
+        if address is None:
+            return super().connect()
+        self.sock = _socket_to(self, address)
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """The same, for TLS: the certificate is checked against the name, not the IP."""
+
+    def __init__(
+        self,
+        *args,
+        resolver: GatewayResolver | None = None,
+        context: ssl.SSLContext | None = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, context=context, **kwargs)
+        self._resolver = resolver
+        # The constructor has already turned a `None` context into the
+        # interpreter's HTTPS default, which is private and not in typeshed.
+        self._tls: ssl.SSLContext = getattr(self, "_context")
+
+    def connect(self):
+        address = _pinned_address(self._resolver, self.host)
+        if address is None:
+            return super().connect()
+        self.sock = _socket_to(self, address)
+        self.sock = self._tls.wrap_socket(self.sock, server_hostname=self.host)
+
+
+def _pinned_address(resolver: GatewayResolver | None, host: str) -> str | None:
+    """The address to open for `host`, or None to let the system resolver decide.
+
+    A proxy is not special-cased. When one is configured the connection opens to
+    the proxy's name instead, which is resolved the same way and lands on the
+    same address the system resolver would have given.
+    """
+    if resolver is None:
+        return None
+    return resolver.address_for(host)
+
+
+def _socket_to(
+    connection: http.client.HTTPConnection, address: str
+) -> socket.socket:
+    """The TCP half of ``http.client``'s ``connect``, to one given address.
+
+    The other half is choosing the address, which is the part being replaced.
+    What is left is what the standard library does: connect, then stop Nagle from
+    holding a small request back.
+    """
+    sock = socket.create_connection(
+        (address, connection.port), connection.timeout
+    )
+    try:
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    except OSError as error:
+        if error.errno != errno.ENOPROTOOPT:
+            raise
+    return sock
 
 
 class PortalClient:
     """One browsing session's worth of HTTP."""
 
-    def __init__(self, timeout: float = 20.0) -> None:
+    def __init__(
+        self, timeout: float = 20.0, resolver: GatewayResolver | None = None
+    ) -> None:
         self._timeout = timeout
         self._cookies = CookieJar()
-        self._opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(self._cookies),
-            _GatewayTrust(),
-            _AcceptEveryStatus,
-        )
+        self._resolver = resolver
+        self._opener = self._build_opener()
         self._headers = {
             "User-Agent": USER_AGENT,
             "Accept-Language": "en-US,en;q=0.9,vi;q=0.8",
         }
+
+    def _build_opener(self) -> urllib.request.OpenerDirector:
+        return urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(self._cookies),
+            _GatewayTrust(self._resolver),
+            _PortalHTTPHandler(self._resolver),
+            _AcceptEveryStatus,
+        )
+
+    def prefer_gateway_dns(
+        self, server_ip: str, on_answer: Callable[[str, str], None] | None = None
+    ) -> None:
+        """Let the router answer for names before the system resolver does.
+
+        The portal is the one address in the sign-in that is a name, and step 2
+        runs at the one moment the machine is captive — when the router is the
+        only resolver inside the walled garden. See :mod:`dormwifi.portal_dns`
+        for what goes wrong without it.
+
+        Doing nothing is the safe case: an empty address, a router with no
+        opinion, or an open link where it forwards upstream all behave exactly as
+        they did before. The connection classes take their resolver when the
+        opener is built, so this rebuilds it and keeps the cookie jar.
+        """
+        if self._resolver is not None or not server_ip:
+            return
+        self._resolver = GatewayResolver(server_ip, on_answer=on_answer)
+        self._opener = self._build_opener()
 
     # MARK: - Requests
 
